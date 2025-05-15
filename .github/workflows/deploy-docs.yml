@@ -4,7 +4,7 @@ name: deploy-docs
 on:
   push:
     branches:
-      - xiaozhi2
+      - main
   workflow_dispatch:
 
 permissions:
