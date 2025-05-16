@@ -7,7 +7,12 @@ export const zhNavbar = navbar([
     icon: "lightbulb",
     prefix: "/get-started/",
     children: [
-      "huangshan/README.md",
+      "yellow_mountain/README.md",
     ],
   },
+  {
+    text: "源码构建",
+    icon: "code",
+    link: "/source-build/",
+  }
 ]);
