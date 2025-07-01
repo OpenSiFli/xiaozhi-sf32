@@ -121,7 +121,7 @@ void send_iot_descriptors(void) {
     rt_kprintf("Sending IoT descriptors:\n");
     rt_kprintf(msg);
     rt_kprintf("\n");
-    if (g_xz_ws.is_connected == 1) 
+    if (g_xz_ws.is_connected == 1)
     {
         wsock_write(&g_xz_ws.clnt, msg, strlen(msg), OPCODE_TEXT);
     }
@@ -146,7 +146,7 @@ void send_iot_states(void) {
     rt_kprintf("Sending IoT states:\n");
     rt_kprintf(msg);
     rt_kprintf("\n");
-    if (g_xz_ws.is_connected == 1) 
+    if (g_xz_ws.is_connected == 1)
     {
         wsock_write(&g_xz_ws.clnt, msg, strlen(msg), OPCODE_TEXT);
     }
@@ -377,9 +377,10 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)//Sessio
             //if(web_g_state == kDeviceStateSpeaking)
             // {
             //     rt_kprintf("speaking, abort\n");
-            //     ws_send_speak_abort(&g_xz_ws.clnt, g_xz_ws.session_id,kAbortReasonWakeWordDetected);//发送停止说话
-            //     xz_speaker(0);//关闭扬声器
             // }
+            //ws_send_speak_abort(&g_xz_ws.clnt, g_xz_ws.session_id,kAbortReasonWakeWordDetected);//发送停止说话
+            //xz_speaker(0);//关闭扬声器
+
             // ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id, kListeningModeManualStop);//发送开始监听
             // xiaozhi_ui_chat_status("聆听中...");
             // xz_mic(1);
@@ -486,7 +487,7 @@ void parse_helLo(const u8_t *data, u16_t len)
     {
         char *txt = cJSON_GetObjectItem(root, "text")->valuestring;
         xiaozhi_ui_chat_output(txt);
-        web_g_state = kDeviceStateSpeaking; 
+        web_g_state = kDeviceStateSpeaking;
         xz_speaker(1);
     }
     else if (strcmp(type, "tts") == 0)
@@ -533,16 +534,16 @@ void parse_helLo(const u8_t *data, u16_t len)
     {
         rt_kprintf(cJSON_GetObjectItem(root, "emotion")->valuestring);
         xiaozhi_ui_update_emoji(cJSON_GetObjectItem(root, "emotion")->valuestring);
-        
+
     }
-    else if (strcmp(type, "iot") == 0) 
+    else if (strcmp(type, "iot") == 0)
     {
 #ifndef CONFIG_IOT_PROTOCOL_MCP
         rt_kprintf("iot command\n");
         cJSON *commands = cJSON_GetObjectItem(root, "commands");
         // rt_kprintf("commands: %s\n", cJSON_Print(commands));
-        for (int i = 0; i < cJSON_GetArraySize(commands); i++) 
-        {   
+        for (int i = 0; i < cJSON_GetArraySize(commands); i++)
+        {
             // rt_kprintf("command %d: %s\n", i, cJSON_Print(cJSON_GetArrayItem(commands, i)));
             cJSON *cmd = cJSON_GetArrayItem(commands, i);
             // rt_kprintf("cmd: %s\n", cJSON_Print(cmd));
@@ -565,7 +566,7 @@ void parse_helLo(const u8_t *data, u16_t len)
         {
             McpServer_ParseMessage(cJSON_PrintUnformatted(payload));
         }
-    }     
+    }
     else
     {
         rt_kprintf("Unkown type: %s\n", type);
