@@ -237,7 +237,7 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
             {
                 // xiaozhi is speaking, do not respond to mic input
                 LOG_I("speaking --> idle");
-                thiz->voice_start_times == 0;
+                thiz->voice_start_times = 0;
                 thiz->voice_stop_times = 0;
                 thiz->voice_state = VOICE_STATE_IDLE;
             }
@@ -262,7 +262,7 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
             else
             { // not voice
                 LOG_I("wait speaking --> idle");
-                thiz->voice_start_times == 0;
+                thiz->voice_start_times = 0;
                 thiz->voice_stop_times = 0;
                 thiz->voice_state = VOICE_STATE_IDLE;
             }
