@@ -610,7 +610,9 @@ void battery_timer_callback(void *parameter)
     // int level = read_battery_level_from_hardware(); // 硬件获取
     int level = 20; // 模拟电池电量为 20%
     rt_kprintf("Battery level: %d\n", level);
+    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
     xiaozhi_update_battery_level(level);
+    rt_sem_release(&update_ui_sema);
 }
 
 void xiaozhi_ui_task(void *args)
