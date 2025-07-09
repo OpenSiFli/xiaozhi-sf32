@@ -358,10 +358,10 @@ int main(void)
     // senser
     HAL_PIN_Set(PAD_PA30, GPIO_A30, PIN_PULLDOWN, 1);
     BSP_GPIO_Set(30, 0, 1);
-    HAL_PIN_Set(PAD_PA39, GPIO_A39, PIN_PULLUP, 1);
-    HAL_PIN_Set(PAD_PA40, GPIO_A40, PIN_PULLUP, 1);
+    HAL_PIN_Set(PAD_PA39, GPIO_A39, PIN_PULLDOWN, 1);
+    HAL_PIN_Set(PAD_PA40, GPIO_A40, PIN_PULLDOWN, 1);
 
-    // rt_pm_request(PM_SLEEP_MODE_IDLE);
+     //rt_pm_request(PM_SLEEP_MODE_IDLE);
 #endif
     // Create  xiaozhi UI
     rt_thread_t tid =

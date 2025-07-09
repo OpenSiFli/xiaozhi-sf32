@@ -20,6 +20,7 @@
 #include "os_support.h"
 #include "audio_server.h"
 #include "mem_section.h"
+
 #ifdef PKG_XIAOZHI_USING_AEC
     #include "webrtc/common_audio/vad/include/webrtc_vad.h"
     #include "sifli_resample.h"
@@ -28,7 +29,7 @@
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
 #include "bt_env.h"
-
+#include "xiaozhi_public.h"
 #undef LOG_TAG
 #define LOG_TAG "xz"
 #define DBG_TAG "xz"
@@ -42,54 +43,13 @@
 #define XZ_EVENT_DOWNLINK (1 << 2)
 #define XZ_EVENT_EXIT (1 << 3)
 
-#define XZ_MIC_FRAME_LEN (320 * 6) // 60ms for 16k samplerate
-#define XZ_SPK_FRAME_LEN (480 * 6) // 60ms for 24k samplerate, speaker frame len
-
 #define XZ_EVENT_ALL                                                           \
     (XZ_EVENT_MIC_RX | XZ_EVENT_SPK_TX | XZ_EVENT_DOWNLINK | XZ_EVENT_EXIT)
 
-#define XZ_DOWNLINK_QUEUE_NUM 128
 
-typedef struct
-{
-    rt_slist_t node;
-    uint8_t *data;
-    uint16_t data_len;
-    uint16_t size;
-} xz_decode_queue_t;
-
-typedef struct
-{
-    struct rt_thread thread;
-    uint8_t encode_in[XZ_MIC_FRAME_LEN];
-    uint8_t encode_out[XZ_MIC_FRAME_LEN];
-    bool inited;
-    bool is_rx_enable;
-    bool is_tx_enable;
-    bool is_exit;
-    uint8_t is_websocket; // 0: mqtt, 1: websocket
-    rt_event_t event;
-    OpusEncoder *encoder;
-    OpusDecoder *decoder;
-    audio_client_t speaker;
-    audio_client_t mic;
-#if PKG_XIAOZHI_USING_AEC
-    sifli_resample_t *resample;
-    VadInst *handle;
-    int voice_state;
-    uint32_t voice_start_times;
-    uint32_t voice_stop_times;
-#endif
-    uint32_t mic_rx_count;
-    struct rt_ringbuffer *rb_opus_encode_input;
-    xz_decode_queue_t downlink_queue[XZ_DOWNLINK_QUEUE_NUM];
-    uint16_t downlink_decode_out[XZ_SPK_FRAME_LEN / 2];
-    rt_slist_t downlink_decode_busy;
-    rt_slist_t downlink_decode_idle;
-} xz_audio_t;
 
 struct udp_pcb *udp_pcb;
-static xz_audio_t xz_audio;
+xz_audio_t xz_audio;
 
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
 L2_RET_BSS_SECT_BEGIN(g_xz_opus_stack)
@@ -212,14 +172,19 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
 {
     // this was called every 10ms
     xz_audio_t *thiz = &xz_audio;
-
     if (thiz->is_rx_enable && cmd == as_callback_cmd_data_coming)
     {
         // data lengh is 320 bytes, which is 10ms for 16k samplerate
         audio_server_coming_data_t *p = (audio_server_coming_data_t *)reserved;
 #ifdef PKG_XIAOZHI_USING_AEC
-        int ret = WebRtcVad_Process(thiz->handle, 16000, (int16_t *)p->data,
-                                    p->data_len / 2);
+    if (thiz->vad_enabled) 
+    {
+        int ret = WebRtcVad_Process(thiz->handle, 16000, (int16_t *)p->data,p->data_len / 2);
+
+        if (web_g_state != kDeviceStateIdle) 
+        {
+            return 0; // 非待命状态不处理VAD
+        }
         if (VOICE_STATE_IDLE == thiz->voice_state)
         {
             if ((ret == 1) && (web_g_state != kDeviceStateSpeaking))
@@ -253,10 +218,11 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
                 }
                 else if (thiz->voice_start_times == VOICE_START_TIMES)
                 {
-                    thiz->voice_start_times = 0;
-                    thiz->voice_state = VOICE_STATE_SPEAKING;
-                    LOG_I("call button pressed");
-                    simulate_button_pressed();
+                        thiz->voice_start_times = 0;
+                        thiz->voice_state = VOICE_STATE_SPEAKING;
+                        LOG_I("call button pressed");
+                        simulate_button_pressed();
+                    
                 }
             }
             else
@@ -299,7 +265,7 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
         {
             RT_ASSERT(0);
         }
-
+    }
 #endif
         rt_ringbuffer_put(thiz->rb_opus_encode_input, p->data, p->data_len);
         thiz->mic_rx_count += 320;
@@ -590,6 +556,40 @@ static void xz_opus_thread_entry(void *p)
     rt_kprintf("---xz thread exit---\r\n");
 }
 
+void xz_aec_mic_open(xz_audio_t *thiz)
+{
+    if (!thiz->mic)
+    {
+        LOG_I("mic on");
+        while (1)
+        {
+            uint8_t buf[128];
+            int len = rt_ringbuffer_get(thiz->rb_opus_encode_input,
+                                        (uint8_t *)&buf[0], sizeof(buf));
+            if (len == 0)
+            {
+                break;
+            }
+        }
+        audio_parameter_t pa = {0};
+        pa.write_bits_per_sample = 16;
+        pa.write_channnel_num = 1;
+        pa.write_samplerate = 16000;
+        pa.read_bits_per_sample = 16;
+        pa.read_channnel_num = 1;
+        pa.read_samplerate = 16000;
+        pa.read_cache_size = 0;
+        pa.write_cache_size = 32000;
+        pa.is_need_3a = 1;
+        thiz->mic = audio_open(AUDIO_TYPE_LOCAL_MUSIC, AUDIO_TXRX, &pa,
+                               mic_callback, NULL);
+        RT_ASSERT(thiz->mic);
+        thiz->speaker = thiz->mic;
+        thiz->is_rx_enable = 1;   //麦克风常开
+        thiz->is_tx_enable = 1;
+
+    }
+}
 void xz_mic_open(xz_audio_t *thiz)
 {
 #if !PKG_XIAOZHI_USING_AEC
@@ -624,6 +624,16 @@ void xz_mic_open(xz_audio_t *thiz)
 #endif
 }
 
+void xz_aec_mic_close(xz_audio_t *thiz)
+{
+    if (thiz->mic)
+    {
+        LOG_I("mic off");
+        audio_close(thiz->mic);
+        thiz->mic = NULL;
+        thiz->is_rx_enable = 0;
+    }
+}
 void xz_mic_close(xz_audio_t *thiz)
 {
 #if !PKG_XIAOZHI_USING_AEC
@@ -720,6 +730,7 @@ void xz_audio_decoder_encoder_open(uint8_t is_websocket)
         memset(thiz, 0, sizeof(xz_audio_t));
 #if PKG_XIAOZHI_USING_AEC
         int ret;
+        thiz->vad_enabled = true;
         audio_parameter_t pa = {0};
         pa.write_bits_per_sample = 16;
         pa.write_channnel_num = 1;
@@ -734,7 +745,7 @@ void xz_audio_decoder_encoder_open(uint8_t is_websocket)
                                mic_callback, NULL);
         RT_ASSERT(thiz->mic);
         thiz->speaker = thiz->mic;
-        thiz->is_rx_enable = 1;
+        thiz->is_rx_enable = 1;   //麦克风常开
         thiz->is_tx_enable = 1;
         thiz->resample = sifli_resample_open(1, 24000, 16000);
         RT_ASSERT(thiz->resample);

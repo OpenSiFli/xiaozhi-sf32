@@ -46,7 +46,7 @@ rt_mailbox_t g_button_event_mb;
 enum DeviceState web_g_state;
 static char message[256];
 extern BOOL g_pan_connected;
-
+extern xz_audio_t *thiz;
 static const char *mode_str[] = {"auto", "manual", "realtime"};
 
 static const char *hello_message =
@@ -219,6 +219,14 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
         }
         else
         {
+#ifdef BSP_USING_PM
+            // 关闭 VAD
+            if(thiz->vad_enabled)
+            {
+                thiz->vad_enabled = false;
+                rt_kprintf("web_cloae,so vad_close\n");
+            }
+#endif    
             xiaozhi_ui_chat_status("休眠中...");
             xiaozhi_ui_chat_output("请按键唤醒");
             xiaozhi_ui_update_emoji("sleepy");
@@ -328,9 +336,19 @@ static void xz_button_event_handler(int32_t pin, button_action_t action) {
         // 1. 检查是否处于睡眠状态（WebSocket未连接）
         if (!g_xz_ws.is_connected) {
             // 先执行唤醒（PAN重连）
+#ifdef BSP_USING_PM
+            rt_kprintf("web_open,so vad_enabled\n");
+            if(!thiz->vad_enabled)
+            {
+                thiz->vad_enabled = true;
+                xz_aec_mic_open(thiz);
+            }
+#endif            
             rt_mb_send(g_bt_app_mb, PAN_RECONNECT);
             xiaozhi_ui_chat_status("唤醒中...");
-        } else {
+        } 
+        else 
+        {   
             // 2. 已唤醒，直接进入对话模式
             rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
             xiaozhi_ui_chat_status("聆听中...");
