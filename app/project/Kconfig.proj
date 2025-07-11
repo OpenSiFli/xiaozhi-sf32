@@ -52,3 +52,12 @@ if !BSP_USING_BUILTIN_LCD
 
 
 endif
+
+# 选择字体文件和路径
+menu "Font configuration"
+    config FONT_FILE
+        string "Font file path"
+        default "font/DroidSansFallback.ttf"
+        help
+            Specify the path to the font file used in the application.
+endmenu

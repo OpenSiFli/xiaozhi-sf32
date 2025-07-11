@@ -3,17 +3,51 @@ title: 使用SiFli-ENV工具编译
 order: 2
 ---
 
+::: warning
+
+本文档仅适用于 Windows 系统用户！！！
+
+:::
+
 ## 准备工作
 
 ### 安装工具链
 
-在开始前，我们需要确保安装了 `SiFli-ENV` 工具。目前最新版的下载链接为：<https://downloads.sifli.com/sdk/env_1.1.1.zip>
+在开始前，我们需要确保安装了 `SiFli-ENV` 工具。目前最新版的下载链接为：<https://downloads.sifli.com/sdk/env_1.1.2.zip>
 
 ### 克隆源码
 
 该步骤的前置准备是你安装了 git 工具，如何安装不多赘述。
 
-目前源码仅托管在 GitHub 上，仓库链接为：<https://github.com/78/xiaozhi-sf32>
+目前源码托管在 GitHub 上，仓库链接为：<https://github.com/78/xiaozhi-sf32>
+
+::: details 使用 gitee 加速
+
+如果在国内访问 GitHub 可能比较困难，那么可以尝试使用 gitee 镜像仓库：<https://gitee.com/SiFli/xiaozhi-sf32>。下述的所有 github 的链接都可以替换为 gitee 的链接。
+
+但是需要注意的是，gitee 中的`子模块`存在一些问题，所以 clone 的时候不需要添加`--recursive`参数，但是需要 clone 下来之后修改仓库根目录下的`.gitmodules` 文件，将
+
+```
+[submodule "sdk"]
+	path = sdk
+	url = ../../OpenSiFli/SiFli-SDK.git
+```
+
+修改为
+
+```
+[submodule "sdk"]
+    path = sdk
+    url = https://gitee.com/SiFli/sifli-sdk.git
+```
+
+然后手动执行 submoudle 初始化
+
+```bash
+git submodule update --init --recursive
+```
+
+:::
 
 使用以下命令克隆源码：
 

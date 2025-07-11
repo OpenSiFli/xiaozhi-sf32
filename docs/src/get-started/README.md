@@ -28,18 +28,19 @@ SF32LB52-DevKit-Nano: SF32LB52-DevKit-Nano.zip
 
 ## 烧录固件
 
-使用[sftool工具](../sftool.md)烧录固件，打开终端之后输入如下命令：
-
+使用[sftool工具](../sftool.md)烧录固件，打开终端之后输入如下命令（Windows）：
+!!!需要注意的是：命令中的 ./sftool.exe 中的斜杠，在不同操作系统中有不同的表现： windows是反斜杠，linux是斜杠。
 ```powershell
 ./sftool.exe -p COM3 -c SF32LB52 write_flash bootloader.bin@0x12010000 main.bin@0x12020000 ftab.bin@0x12000000
 ```
 
 ::: tip
-
+`bootloader.bin`、`main.bin`、和`ftab.bin`是你下载的固件文件名，建议使用绝对路径引用，如果路径中出现中文或者空格请用`"`将路径括起来。
 其中`COM3`是你连接开发板的串口号，可能会有所不同，请根据实际情况修改。
 可以打开设备管理器查看对应串口号：'COM'后面接着的数字就是串口号
-![](image/add3.png) 
-`bootloader.bin`、`main.bin`、和`ftab.bin`是你下载的固件文件名，建议使用绝对路径引用，如果路径中出现中文或者空格请用`"`将路径括起来。
+![](image/add3.png)
+当打开设备管理器没有看见上图所示COM口而是出现如下图所示感叹号的情况，可能是没有安装驱动的原因，可以点击此链接跳转下载驱动：https://www.wch.cn/downloads/CH341SER_EXE.html
+ ![](image/add4.png)
 
 :::
 

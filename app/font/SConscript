@@ -1,0 +1,68 @@
+import os
+import subprocess
+import sys
+from building import *
+
+# 字体自动转换功能
+def auto_convert_font():
+    try:
+        # 获取字体文件路径配置
+        font_file_path = GetDepend('FONT_FILE').replace('"', '')
+        
+        # 构建路径
+        cwd = GetCurrentDir()
+        app_root = os.path.dirname(cwd)
+        full_font_path = os.path.join(app_root, font_file_path)
+        converter_script = os.path.join(app_root, 'tools', 'font_converter.py')
+        xiaozhi_font_c = os.path.join(cwd, 'xiaozhi_font.c')
+        
+        # 检查字体文件是否存在
+        if not os.path.exists(full_font_path):
+            print(f"Warning: 字体文件不存在: {font_file_path}")
+            return []
+        
+        # 检查转换工具是否存在
+        if not os.path.exists(converter_script):
+            print(f"Warning: 字体转换工具不存在: {converter_script}")
+            return []
+        
+
+        print(f"正在转换字体文件: {font_file_path}")
+        cmd = [sys.executable, converter_script, full_font_path, '-n', 'xiaozhi_font']
+        
+        # 改变工作目录到font目录，这样生成的文件会在正确位置
+        font_dir = os.path.dirname(full_font_path)
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=font_dir)
+        
+        if result.returncode == 0:
+            # 移动生成的文件到font目录（保持在font目录）
+            generated_file = os.path.join(font_dir, 'xiaozhi_font.c')
+            if os.path.exists(generated_file):
+                # 移动到font目录下，使用xiaozhi_font.c作为最终文件名
+                xiaozhi_font_c = generated_file
+                print(f"字体转换成功: {xiaozhi_font_c}")
+            else:
+                print(f"Warning: 生成的字体文件未找到: {generated_file}")
+                return []
+        else:
+            print(f"Error: 字体转换失败: {result.stderr.strip()}")
+            sys.exit(1)
+            return []
+        
+        # 创建编译对象
+        if os.path.exists(xiaozhi_font_c):
+            src = Glob('*.c')
+            font_group = DefineGroup('FontData', src, depend = [''])
+            print(f"已添加字体文件到编译: {os.path.basename(xiaozhi_font_c)}")
+            return font_group
+        
+        return []
+        
+    except Exception as e:
+        print(f"字体转换过程出错: {e}")
+        return []
+
+# 执行字体自动转换并返回编译对象
+font_objs = auto_convert_font()
+
+Return('font_objs')
