@@ -226,7 +226,8 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
                 thiz->vad_enabled = false;
                 rt_kprintf("web_cloae,so vad_close\n");
             }
-#endif    
+#endif      
+            MCP_RGBLED_CLOSE();
             xiaozhi_ui_chat_status("休眠中...");
             xiaozhi_ui_chat_output("请按键唤醒");
             xiaozhi_ui_update_emoji("sleepy");

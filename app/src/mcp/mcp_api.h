@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 void McpServer_ParseMessage(const char* message);
-
+void MCP_RGBLED_CLOSE();
 
 #ifdef __cplusplus
 }

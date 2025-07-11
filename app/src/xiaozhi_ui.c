@@ -18,6 +18,7 @@
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
 #include "bt_env.h"
+#include "./mcp/mcp_api.h"
 #define IDLE_TIME_LIMIT  (30000)
 #define SHOW_TEXT_LEN 150
 #define LCD_DEVICE_NAME "lcd"
@@ -778,7 +779,7 @@ void xiaozhi_ui_task(void *args)
                 bt_interface_wr_link_policy_setting(
                 (unsigned char *)&g_bt_app_env.bd_addr,
                 BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
-               
+                MCP_RGBLED_CLOSE();
                 gui_pm_fsm(GUI_PM_ACTION_SLEEP);
             
             }

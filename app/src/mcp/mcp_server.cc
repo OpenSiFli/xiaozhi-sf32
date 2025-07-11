@@ -8,6 +8,7 @@
 #include <cstring>
 #include "../iot/thing_manager.h"
 #include <webclient.h>
+#include "rgbled_mcp.h" 
 // #include "lwip/apps/websocket_client.h"   // 提供 wsock_write 和 OPCODE_TEXT 定义
 #include "../xiaozhi2.h"        // 提供 g_xz_ws 定义
 
@@ -39,6 +40,7 @@ void McpServer::AddCommonTools() {
 #if 1   
    auto speaker = iot::ThingManager::GetInstance().GetThing("Speaker");
     if (speaker) {
+        //设置音量工具
         AddTool("self.audio_speaker.set_volume",
         "Set the volume of the audio speaker.",
         PropertyList({
@@ -55,7 +57,7 @@ void McpServer::AddCommonTools() {
             return true;
         });
 
-         // 新增：获取当前音量工具
+         //获取当前音量工具
         AddTool("self.audio_speaker.get_volume",
         "Get the current volume of the audio speaker.",
         PropertyList(),
@@ -66,12 +68,11 @@ void McpServer::AddCommonTools() {
             cJSON_Delete(cmd);
             return audio_server_get_private_volume(AUDIO_TYPE_LOCAL_MUSIC);
         });
-
-        
     }
     
     auto screen = iot::ThingManager::GetInstance().GetThing("Screen");
     if (screen) {
+        //设置屏幕亮度工具
         AddTool("self.screen.set_brightness",
         "Set the brightness of the screen.",
         PropertyList({
@@ -88,6 +89,7 @@ void McpServer::AddCommonTools() {
             return true;
         });
 
+        //获取屏幕亮度工具
         AddTool("self.screen.get_bbrightness",
         "Get the current brightness of the screen.",
         PropertyList(),
@@ -104,9 +106,10 @@ void McpServer::AddCommonTools() {
             }
             return 50; // 默认值
         });
-
-        
     }
+        // 添加RGB LED工具
+        RGBLEDTool::RegisterRGBLEDTool(this);
+
 #endif 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
