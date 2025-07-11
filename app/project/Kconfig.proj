@@ -53,6 +53,18 @@ if !BSP_USING_BUILTIN_LCD
 
 endif
 
+config BLUETOOTH_NAME
+    string "Bluetooth device name"
+    default "sifli-pan"
+    help
+        Specify the Bluetooth device name for the application.
+
+config BT_NAME_MAC_ENABLE
+    bool "Append the MAC address to the Bluetooth name"
+    default n
+    help
+        Append the MAC address to the Bluetooth name, such as "sifli-pan-12:34:56:78:9a:bc".
+
 # 选择字体文件和路径
 menu "Font configuration"
     config FONT_FILE

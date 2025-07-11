@@ -458,17 +458,6 @@ uint32_t bt_get_class_of_device()
            BT_PERIPHERAL_REMCONTROL;
 }
 
-/**
- * @brief  Main program
- * @param  None
- * @retval 0 if success, otherwise failure number
- */
-#ifdef BT_DEVICE_NAME
-static const char *local_name = BT_DEVICE_NAME;
-#else
-static const char *local_name = "sifli-pan";
-#endif
-
 int main(void)
 {
     // 初始化邮箱
@@ -493,7 +482,7 @@ int main(void)
     HAL_PIN_Set(PAD_PA39, GPIO_A39, PIN_PULLDOWN, 1);
     HAL_PIN_Set(PAD_PA40, GPIO_A40, PIN_PULLDOWN, 1);
 
-     //rt_pm_request(PM_SLEEP_MODE_IDLE);
+    // rt_pm_request(PM_SLEEP_MODE_IDLE);
 #endif
     // Create  xiaozhi UI
     rt_thread_t tid =
@@ -556,7 +545,16 @@ int main(void)
         {
             LOG_I("BT/BLE stack and profile ready");
 
-            // Update Bluetooth name
+#ifdef BT_NAME_MAC_ENABLE
+            char local_name[32];
+            bd_addr_t addr;
+            ble_get_public_address(&addr);
+            sprintf(local_name, "%s-%02x:%02x:%02x:%02x:%02x:%02x",
+                    BLUETOOTH_NAME, addr.addr[0], addr.addr[1], addr.addr[2],
+                    addr.addr[3], addr.addr[4], addr.addr[5]);
+#else
+            const char *local_name = BLUETOOTH_NAME;
+#endif
             bt_interface_set_local_name(strlen(local_name), (void *)local_name);
         }
         else if (value == BT_APP_CONNECT_PAN_SUCCESS)
