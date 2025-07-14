@@ -42,12 +42,12 @@ void McpServer::AddCommonTools() {
     if (speaker) {
         //设置音量工具
         AddTool("self.audio_speaker.set_volume",
-        "Set the volume of the audio speaker.",
+        "Set the volume of the audio speaker,Must not exceed 15.",
         PropertyList({
             Property("volume", kPropertyTypeInteger, 0, 15)
         }),
         [=](const PropertyList& properties) -> ReturnValue {
-            int volume = properties["volume"].value<int>();
+            int volume = std::clamp(properties["volume"].value<int>(), 0, 15);
             auto json_str = R"({"method":"SetVolume","parameters":{"volume":)" + std::to_string(volume) + "}}";
             auto command = cJSON_Parse(json_str.c_str());
             if (command) {
@@ -334,7 +334,13 @@ void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* to
                     argument.set_value<bool>(value->valueint == 1);
                     found = true;
                 } else if (argument.type() == kPropertyTypeInteger && cJSON_IsNumber(value)) {
-                    argument.set_value<int>(value->valueint);
+                    int value_int = value->valueint;
+                    rt_kprintf("value_int: %d\n", value_int);
+                    if (argument.has_range()) {
+                    value_int = std::clamp(value_int, argument.min_value(), argument.max_value());
+                }
+
+                    argument.set_value<int>(value_int);
                     found = true;
                 } else if (argument.type() == kPropertyTypeString && cJSON_IsString(value)) {
                     argument.set_value<std::string>(value->valuestring);

@@ -28,8 +28,8 @@ bool RGBLEDTool::IsLightOn() {
 void RGBLEDTool::RegisterRGBLEDTool(McpServer* server) {
     // 循环变色工具
         server->AddTool(
-            "self.led.start_color_cycle",
-            "Start cycling through colors on the LED.",
+            "self.led.turn_on_the_light",
+            "turn on the light.",
             PropertyList(),
             [](const PropertyList&) -> ReturnValue {
                 if (is_color_cycling_) return true;
@@ -49,8 +49,8 @@ void RGBLEDTool::RegisterRGBLEDTool(McpServer* server) {
     );
 
     server->AddTool(
-        "self.led.stop_color_cycle",
-        "Stop the LED from cycling through colors.",
+        "self.led.turn_off_the_light",
+        "turn off the light.",
         PropertyList(),
         [](const PropertyList&) -> ReturnValue {
             is_color_cycling_ = false;
