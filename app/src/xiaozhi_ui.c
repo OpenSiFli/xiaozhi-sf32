@@ -19,7 +19,7 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "./mcp/mcp_api.h"
-#define IDLE_TIME_LIMIT  (10000)
+#define IDLE_TIME_LIMIT  (30000)
 #define SHOW_TEXT_LEN 150
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"

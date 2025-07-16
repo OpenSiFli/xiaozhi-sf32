@@ -47,7 +47,7 @@ void McpServer::AddCommonTools() {
             Property("volume", kPropertyTypeInteger, 0, 15)
         }),
         [=](const PropertyList& properties) -> ReturnValue {
-            int volume = std::clamp(properties["volume"].value<int>(), 0, 15);
+            int volume = properties["volume"].value<int>();
             auto json_str = R"({"method":"SetVolume","parameters":{"volume":)" + std::to_string(volume) + "}}";
             auto command = cJSON_Parse(json_str.c_str());
             if (command) {
@@ -107,8 +107,9 @@ void McpServer::AddCommonTools() {
             return 50; // 默认值
         });
     }
-        // 添加RGB LED工具
-        RGBLEDTool::RegisterRGBLEDTool(this);
+    
+    // 添加RGB LED工具
+    RGBLEDTool::RegisterRGBLEDTool(this);
 
 #endif 
     // Restore the original tools list to the end of the tools list
