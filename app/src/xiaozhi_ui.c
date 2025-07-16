@@ -19,7 +19,7 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "./mcp/mcp_api.h"
-#define IDLE_TIME_LIMIT  (30000)
+#define IDLE_TIME_LIMIT  (10000)
 #define SHOW_TEXT_LEN 150
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
@@ -78,7 +78,6 @@ extern void ws_send_listen_start(void *ws, char *session_id,
 extern void ws_send_listen_stop(void *ws, char *session_id);
 extern xz_audio_t xz_audio;
 xz_audio_t *thiz = &xz_audio;
-static rt_timer_t battery_timer = RT_NULL;
 extern rt_mailbox_t g_battery_mb;
 // 默认oled电池图标尺寸
 #define OUTLINE_W 58
@@ -540,13 +539,11 @@ static void pm_event_handler(gui_pm_event_type_t event)
     case GUI_PM_EVT_SUSPEND:
     {
         LOG_I("in GUI_PM_EVT_SUSPEND");
-        rt_timer_stop(battery_timer);
         lv_timer_enable(false);
         break;
     }
     case GUI_PM_EVT_RESUME:
     {
-        rt_timer_start(battery_timer);
         lv_timer_enable(true);
         break;
     }
