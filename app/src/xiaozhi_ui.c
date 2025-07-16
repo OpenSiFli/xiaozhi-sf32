@@ -20,7 +20,7 @@
 #include "bt_env.h"
 #include "./mcp/mcp_api.h"
 #define IDLE_TIME_LIMIT  (10000)
-#define SHOW_TEXT_LEN 150
+#define SHOW_TEXT_LEN 100
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
 static struct rt_semaphore update_ui_sema;
@@ -330,7 +330,7 @@ static void switch_to_second_part(void *parameter)
 
             // 重置定时器以显示下一部分
             rt_timer_control(g_split_text_timer, RT_TIMER_CTRL_SET_TIME,
-                             &(rt_tick_t){rt_tick_from_millisecond(9000)});
+                             &(rt_tick_t){rt_tick_from_millisecond(6000)});
             rt_timer_start(g_split_text_timer);
         }
         else
@@ -388,7 +388,7 @@ void xiaozhi_ui_tts_output(char *string)
             {
                 g_split_text_timer = rt_timer_create(
                     "next_text", switch_to_second_part, NULL,
-                    rt_tick_from_millisecond(9000), // 9秒后显示下一部分
+                    rt_tick_from_millisecond(6000), // 9秒后显示下一部分
                     RT_TIMER_FLAG_ONE_SHOT | RT_TIMER_FLAG_SOFT_TIMER);
             }
             else
