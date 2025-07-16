@@ -501,7 +501,7 @@ int main(void)
     sifli_ble_enable();
 
     rt_thread_t battery_thread =
-        rt_thread_create("battery", battery_level_task, NULL, 1024, 20, 10);
+        rt_thread_create("battery", battery_level_task, NULL, 1024*2, 20, 10);
     rt_thread_startup(battery_thread);
 
 #ifdef BSP_USING_BOARD_SF32LB52_XTY_AI
