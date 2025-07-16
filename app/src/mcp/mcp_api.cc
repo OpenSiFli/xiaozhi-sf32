@@ -18,8 +18,10 @@ extern "C"
     {
         if (RGBLEDTool::is_color_cycling_)
         {
+            GetRGBLEDController().SetColor(0x000000);
             RGBLEDTool::is_color_cycling_ = false;
             GetRGBLEDController().SetColor(0x000000);  // 关灯
+            rt_thread_mdelay(100);
         }
     }  
 
