@@ -18,10 +18,8 @@
 #include "os_support.h"
 #include "audio_server.h"
 #include "mem_section.h"
-#ifdef PKG_XIAOZHI_USING_AEC
-    #include "webrtc/common_audio/vad/include/webrtc_vad.h"
-    #include "sifli_resample.h"
-#endif
+#include "webrtc/common_audio/vad/include/webrtc_vad.h"
+#include "sifli_resample.h"
 #include "bts2_app_inc.h"
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
@@ -68,13 +66,11 @@ typedef struct
     OpusDecoder *decoder;
     audio_client_t speaker;
     audio_client_t mic;
-#if PKG_XIAOZHI_USING_AEC
     sifli_resample_t *resample;
     VadInst *handle;
     int voice_state;
     uint32_t voice_start_times;
     uint32_t voice_stop_times;
-#endif
     uint32_t mic_rx_count;
     struct rt_ringbuffer *rb_opus_encode_input;
     xz_decode_queue_t downlink_queue[XZ_DOWNLINK_QUEUE_NUM];
@@ -86,5 +82,11 @@ typedef struct
 
 void xz_aec_mic_close(xz_audio_t *thiz);
 void xz_aec_mic_open(xz_audio_t *thiz);
-
+uint8_t vad_is_enable(void);
+void vad_set_enable(uint8_t enable);
+uint8_t aec_is_enable(void);
+void aec_set_enable(uint8_t enable);
+enum ListeningMode xz_get_mode(void);
+uint8_t xz_get_config_update(void);
+void xz_set_config_update(uint8_t en);
 #endif // XIAOZHI_PUBLIC_H

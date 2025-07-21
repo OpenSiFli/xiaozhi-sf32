@@ -61,6 +61,9 @@ static const char *ota_version =
     "}\r\n";
 
 // 公共变量定义
+static uint8_t g_en_vad = 0;
+static uint8_t g_en_aec = 0;
+static uint8_t g_config_change = 0;
 char mac_address_string[20];
 char client_id_string[40];
 ALIGN(4) uint8_t g_sha256_result[32] = {0};
@@ -277,3 +280,50 @@ char *my_json_string(cJSON *json, char *key)
     }
     return r;
 }
+
+uint8_t vad_is_enable(void)
+{
+    return g_en_vad;
+}
+
+void vad_set_enable(uint8_t enable)
+{
+    if(enable != g_en_vad)
+    {
+        g_en_vad = enable;
+        xz_set_config_update(true);
+        rt_kprintf("vad_set_enable VAD %d \r\n", g_en_vad);
+    }
+}
+
+uint8_t aec_is_enable(void)
+{
+    return g_en_aec;
+}
+
+void aec_set_enable(uint8_t enable)
+{
+    if(enable != g_en_aec)
+    {
+        g_en_aec = enable;
+        xz_set_config_update(true);
+        rt_kprintf("vad_set_enable AEC %d \r\n", g_en_aec);
+    }
+}
+
+uint8_t xz_get_config_update(void)
+{
+    return g_config_change;
+}
+
+void xz_set_config_update(uint8_t en)
+{
+    g_config_change = en;
+}
+
+
+enum ListeningMode xz_get_mode(void)
+{
+    return aec_is_enable() ? kListeningModeAlwaysOn : kListeningModeManualStop;
+}
+

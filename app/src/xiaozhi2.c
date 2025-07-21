@@ -195,8 +195,8 @@ void xz_audio_send_using_websocket(uint8_t *data, int len)
         err_t err = wsock_write(&g_xz_ws.clnt, data, len, OPCODE_BINARY);
         // rt_kprintf("send audio = %d len=%d\n", err, len);
     }
-    else
-        rt_kprintf("Websocket disconnected\n");
+    //else
+    //    rt_kprintf("Websocket disconnected\n");
 }
 
 err_t my_wsapp_fn(int code, char *buf, size_t len)
@@ -343,7 +343,10 @@ static void xz_button_event_handler(int32_t pin, button_action_t action) {
             if(!thiz->vad_enabled)
             {
                 thiz->vad_enabled = true;
-                xz_aec_mic_open(thiz);
+                if(aec_is_enable())
+                    xz_aec_mic_open(thiz);
+                else
+                    xz_mic_open(thiz);
             }
 #endif            
             rt_mb_send(g_bt_app_mb, PAN_RECONNECT);
@@ -367,16 +370,16 @@ static void xz_button_event_handler(int32_t pin, button_action_t action) {
         }
     }
 }
-#if PKG_XIAOZHI_USING_AEC
 void simulate_button_pressed()
 {
-    xz_button_event_handler(BSP_KEY1_PIN, BUTTON_PRESSED);
+    if(vad_is_enable())
+        xz_button_event_handler(BSP_KEY1_PIN, BUTTON_PRESSED);
 }
 void simulate_button_released()
 {
-    xz_button_event_handler(BSP_KEY1_PIN, BUTTON_RELEASED);
+    if(vad_is_enable())
+        xz_button_event_handler(BSP_KEY1_PIN, BUTTON_RELEASED);
 }
-#endif
 static void xz_button_init(void) // Session key
 {
     static int initialized = 0;
@@ -667,6 +670,15 @@ int web_http_xiaozhi_data_parse(char *json_data)
     cJSON_Delete(root); /*每次调用cJSON_Parse函数后，都要释放内存*/
     return 0;
 }
+
+void xiaozhi2_deinit(void)
+{
+    wsock_close(&g_xz_ws.clnt, WSOCK_RESULT_LOCAL_ABORT, ERR_OK);
+    g_xz_ws.is_connected = 0;
+    xz_audio_decoder_encoder_close();
+    rt_kprintf("%s\r\n", __func__);
+}
+
 
 void xiaozhi2(int argc, char **argv)
 {
