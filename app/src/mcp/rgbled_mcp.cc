@@ -6,6 +6,7 @@
 #include "drivers/rt_drv_pwm.h"
 #include "bf0_hal.h"
 
+#define LED_PIN 32 
 RGBLEDController& GetRGBLEDController() {
     static RGBLEDController instance;
     return instance;
@@ -14,11 +15,19 @@ RGBLEDController& GetRGBLEDController() {
 bool RGBLEDTool::is_color_cycling_ = false;
 void RGBLEDTool::ColorCycleThreadEntry(void* param) {
     int index = 0;
+    uint32_t toggle = 0; // 用于52J板子的LED切换状态
     while (is_color_cycling_) {
+#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+        // 对于52J板子，控制PA32引脚以1秒周期亮灭
+        rt_pin_write(LED_PIN, toggle ? PIN_HIGH : PIN_LOW);
+        toggle = !toggle;
+        rt_thread_mdelay(1000);
+#else
         uint32_t color = rgb_color_arry[index].color;
         GetRGBLEDController().SetColor(color);
         index = (index + 1) % (sizeof(rgb_color_arry)/sizeof(rgb_color_arry[0]));
         rt_thread_mdelay(500);
+#endif
     }
 }
 bool RGBLEDTool::IsLightOn() {
@@ -32,20 +41,22 @@ void RGBLEDTool::RegisterRGBLEDTool(McpServer* server) {
             "turn on the light.",
             PropertyList(),
             [](const PropertyList&) -> ReturnValue {
-                if (is_color_cycling_) return true;
-
-                is_color_cycling_ = true;
-
-                rt_thread_t thread = rt_thread_create("rgb_cycle",
-                    ColorCycleThreadEntry,  // 使用静态函数
-                    nullptr,
-                    1024,
-                    10,
-                    10);
-
-                if (thread) rt_thread_startup(thread);
-                return true;
-        }
+            if (is_color_cycling_) return true;
+            is_color_cycling_ = true;
+#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+            // 配置PA32为GPIO输出模式并输出低电平（点亮）
+            rt_pin_mode(LED_PIN, PIN_MODE_OUTPUT);
+            rt_pin_write(LED_PIN, PIN_LOW);
+#endif      
+            rt_thread_t thread = rt_thread_create("rgb_cycle",
+                            ColorCycleThreadEntry, 
+                            nullptr,
+                            1024,
+                            10,
+                            10);
+            if (thread) rt_thread_startup(thread);
+            return true;
+    }
     );
 
     server->AddTool(
@@ -54,7 +65,12 @@ void RGBLEDTool::RegisterRGBLEDTool(McpServer* server) {
         PropertyList(),
         [](const PropertyList&) -> ReturnValue {
             is_color_cycling_ = false;
+#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+            // 对于52J板子，控制PA32引脚输出高电平熄灭LED
+            rt_pin_write(LED_PIN, PIN_HIGH);
+#else
             GetRGBLEDController().SetColor(0x000000);
+#endif
             return true;
         }
     );
