@@ -476,7 +476,8 @@ int main(void)
         return 0;
     }
 
-    audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, 6); // 设置音量 
+    audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, VOL_DEFAULE_LEVEL); // 设置音量 
+    xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
     iot_initialize(); // Initialize iot
 #ifdef BSP_USING_BOARD_SF32LB52_LCHSPI_ULP
     unsigned int *addr2 = (unsigned int *)0x50003088; // 21

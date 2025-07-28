@@ -75,10 +75,11 @@ static lv_obj_t *cont = NULL;
 #define CONT_HIDDEN         0x02
 #define CONT_DEFAULT_STATUS     (CONT_IDLE | CONT_HIDDEN)
 #define USING_TOUCH_SWITCH  1
-#define USING_BTN_SWITCH    1
-
+#define USING_BTN_SWITCH    0
+#define ANIM_TIMEOUT        300
 
 static uint8_t cont_status = CONT_DEFAULT_STATUS;
+static uint32_t anim_tick = 0;
 
 // xiaozhi2
 extern rt_mailbox_t g_button_event_mb;
@@ -103,6 +104,15 @@ extern rt_mailbox_t g_battery_mb;
 static int g_battery_level = 100;        // 默认为满电
 static lv_obj_t *g_battery_fill = NULL;  // 电池填充对象
 static lv_obj_t *g_battery_label = NULL; // 电量标签
+
+// 亮度表需要按照从小到大排序
+static const uint16_t brigtness_tb[] = 
+{
+    LCD_BRIGHTNESS_MIN,
+    LCD_BRIGHTNESS_MID,
+    LCD_BRIGHTNESS_MAX,
+};
+#define BRT_TB_SIZE     (sizeof(brigtness_tb)/sizeof(brigtness_tb[0]))
 
 #define BASE_WIDTH 390
 #define BASE_HEIGHT 450
@@ -148,6 +158,23 @@ static void countdown_anim_del(void)
     lv_anim_delete(cont, NULL);
 }
 
+static void enable_indev(bool enable)
+{
+    lv_indev_t *i = lv_indev_get_next(NULL);
+    while (i)
+    {
+        if ((lv_indev_get_type(i) != LV_INDEV_TYPE_POINTER))
+        {
+            if (!enable)
+            {
+                lv_indev_reset(i, NULL);
+            }
+            lv_indev_enable(i, enable);
+        }
+        i = lv_indev_get_next(i);
+    }
+}
+
 static void switch_cont_anim_ready_cb(struct lv_anim_t* anim)
 {
     lv_obj_t* obj = anim->var;
@@ -156,6 +183,8 @@ static void switch_cont_anim_ready_cb(struct lv_anim_t* anim)
         countdown_anim();
     }
     cont_status |= CONT_IDLE;
+    anim_tick = 0;
+    enable_indev(true);
     LOG_I("%s:status %d",__func__, cont_status);
 }
 
@@ -166,6 +195,7 @@ static void switch_cont_anim(bool hidden)
     lv_anim_init(&a);
     lv_anim_set_var(&a, cont);
     lv_anim_del(cont, NULL);
+    enable_indev(false);
     if (hidden)
     {
         lv_anim_set_values(&a, lv_obj_get_y(cont), -lv_obj_get_height(cont));
@@ -180,14 +210,43 @@ static void switch_cont_anim(bool hidden)
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
 
     lv_anim_start(&a);
+    anim_tick = lv_tick_get();
 }
 
+static void switch_anim_timeout_check(void)
+{
+    if(anim_tick && (anim_tick + ANIM_TIMEOUT < lv_tick_get()) && 0 == (cont_status & CONT_IDLE))
+    {
+        LOG_I("%s:to set hidden %d",__func__, cont_status & CONT_HIDDEN);
+        if(cont_status & CONT_HIDDEN)
+        {
+            switch_cont_anim(true);
+        }
+        else 
+        {
+            switch_cont_anim(false);
+        }
+    }
+}
 
 static void header_row_event_handler(struct _lv_event_t* e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if(code == LV_EVENT_SHORT_CLICKED)
-        switch_cont_anim(false);
+    {
+        if(0 == (cont_status & CONT_IDLE)) return;
+        if(cont_status & CONT_HIDDEN)
+        {
+            switch_cont_anim(false);
+            cont_status &= (uint8_t)~CONT_HIDDEN;
+        }
+        else 
+        {
+            switch_cont_anim(true);
+            cont_status |= CONT_HIDDEN;
+        }
+        cont_status &= (uint8_t)(~CONT_IDLE);
+    }
 }
 
 static lv_obj_t* create_tip_label(lv_obj_t* parent, const char* tips, uint8_t row, uint8_t col)
@@ -220,34 +279,137 @@ static lv_obj_t* create_switch(lv_obj_t* parent,lv_event_cb_t cb, uint8_t row, u
     return sw;
 }
 
+static lv_obj_t* create_slider(lv_obj_t* parent, lv_event_cb_t cb, uint8_t row, uint8_t col, int32_t min, int32_t max, uint8_t val)
+{
+    lv_obj_t* slider = lv_slider_create(parent);
+    lv_obj_set_grid_cell(slider, LV_GRID_ALIGN_STRETCH, col, 2,
+        LV_GRID_ALIGN_STRETCH, row, 1);
+    lv_obj_add_event_cb(slider, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_slider_set_range(slider, min, max);
+    lv_slider_set_value(slider, val, LV_ANIM_OFF);
+    lv_obj_add_flag(slider, LV_OBJ_FLAG_EVENT_BUBBLE);
+    return slider;
+}
+
+static lv_obj_t* create_lines(lv_obj_t* parent, lv_event_cb_t cb, uint8_t row, uint8_t col, uint16_t cnt, uint16_t val)
+{
+#define COL_PAD_ALL_PCT     10
+
+    lv_obj_t* obj = lv_obj_create(parent);
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, col, 2,
+        LV_GRID_ALIGN_STRETCH, row, 1);
+    lv_obj_set_style_bg_opa(obj, 0, 0);
+    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_layout(obj, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(obj,
+        LV_FLEX_ALIGN_SPACE_BETWEEN,
+        LV_FLEX_ALIGN_CENTER,
+        LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t* btn;
+    for (uint32_t i = 0; i < cnt; i++)
+    {
+        btn = lv_btn_create(obj);
+        lv_obj_remove_style_all(btn);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        if (brigtness_tb[i] <= val)
+            lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_LIGHT_GREEN), 0);
+        else
+            lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREY), 0);
+        lv_obj_set_size(btn, LV_PCT((100 - COL_PAD_ALL_PCT)/cnt), LV_PCT(80));
+        lv_obj_add_flag(btn, LV_OBJ_FLAG_EVENT_BUBBLE);
+        lv_obj_add_event_cb(btn, cb, LV_EVENT_SHORT_CLICKED, (void *)i);
+        lv_obj_set_ext_click_area(btn, LV_DPX(8));
+        lv_obj_set_user_data(btn, obj);
+    }
+    return obj;
+}
+
+
 static void cont_event_handler(struct lv_event_t* e)
 {
     lv_obj_t* cont = lv_event_get_current_target_obj(e);
     lv_event_code_t code = lv_event_get_code(e);
+    static uint32_t press_tick = 0;
+    static lv_point_t press_pos = {0};
+
     if (lv_obj_get_y(cont) != 0) return;
+
     if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST)
     {
-        countdown_anim();
+        uint32_t release_tick = lv_tick_get();
+        lv_point_t release_pos;
+        lv_indev_get_point(lv_indev_get_act(), &release_pos);
+        int32_t dx = release_pos.x - press_pos.x;
+        int32_t dy = release_pos.y - press_pos.y;
+        if(release_tick - press_tick < 500 &&  dy < 0 && abs(dy) > 50) 
+        {
+            switch_cont_anim(true);
+            cont_status |= CONT_HIDDEN;
+            cont_status &= ~CONT_IDLE;
+        }
+        else
+        {
+            countdown_anim();
+        }
     }
     else if(code == LV_EVENT_PRESSED)
     {
         countdown_anim_del();
+        press_tick = lv_tick_get();
+        lv_indev_get_point(lv_indev_get_act(), &press_pos);
+
     }
 }
 
 static void vad_switch_event_handler(struct _lv_event_t* e)
 {
     lv_obj_t * obj = lv_event_get_current_target(e);
-    vad_set_enable(lv_obj_has_state(obj, LV_STATE_CHECKED));
-    send_xz_config_msg_to_main();
+//    vad_set_enable(lv_obj_has_state(obj, LV_STATE_CHECKED));
+//    send_xz_config_msg_to_main();
 }
 
 static void aec_switch_event_handler(struct _lv_event_t* e)
 {
     lv_obj_t * obj = lv_event_get_current_target(e);
-    aec_set_enable(lv_obj_has_state(obj, LV_STATE_CHECKED));
-    send_xz_config_msg_to_main();
+//    aec_set_enable(lv_obj_has_state(obj, LV_STATE_CHECKED));
+//    send_xz_config_msg_to_main();
 }
+
+static void slider_event_handler(struct _lv_event_t* e)
+{
+    lv_obj_t* slider = lv_event_get_current_target_obj(e);
+    audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, lv_slider_get_value(slider)); // 设置音量 
+}
+
+static void line_event_handler(struct _lv_event_t* e)
+{
+    uint32_t idx = (uint32_t)lv_event_get_user_data(e);
+    lv_obj_t* obj = lv_event_get_current_target_obj(e);
+    lv_obj_t* parent = (lv_obj_t *)lv_obj_get_user_data(obj);
+    uint32_t cnt = lv_obj_get_child_count(parent);
+    lv_obj_t* child;
+    uint16_t i = 0;
+    while(i < cnt)
+    {
+         child = lv_obj_get_child(parent, i);
+         if (i <= idx)
+         {
+             lv_obj_set_style_bg_color(child, lv_palette_main(LV_PALETTE_LIGHT_GREEN), 0); 
+         }
+         else
+         {
+             lv_obj_set_style_bg_color(child, lv_palette_main(LV_PALETTE_GREY), 0);
+         }
+         i++;
+    }
+    rt_kprintf("set brightness %d", brigtness_tb[idx]);
+    xz_set_lcd_brightness(brigtness_tb[idx]);
+}
+
 
 #if USING_BTN_SWITCH
 static void xz_ui_button_event_handler(int32_t pin, button_action_t action) {
@@ -403,32 +565,44 @@ rt_err_t xiaozhi_ui_obj_init()
 #endif // defualt
     lv_obj_add_flag(battery_outline, LV_OBJ_FLAG_EVENT_BUBBLE);
 
+#define CONT_W          scr_width
+#define CONT_H          scr_height
+#define CONT_W_PER(x)   ((CONT_W)*(x)/100)
+#define CONT_H_PER(x)   ((CONT_H)*(x)/100)
 
-    static int32_t col_dsc[] = {0, LV_GRID_FR(1), 0, LV_GRID_FR(1), 0, 0, LV_GRID_TEMPLATE_LAST };
-    col_dsc[2] = col_dsc[4] = SCALE_DPX(50);
-    col_dsc[0] = col_dsc[5] = SCALE_DPX(10);
-    static int32_t row_dsc[] = {0, 0, LV_GRID_TEMPLATE_LAST };
-    row_dsc[0] = SCALE_DPX(8);
-    row_dsc[1] = SCALE_DPX(25);
+    static int32_t col_dsc[] = {0, 1, LV_GRID_FR(1), 0, LV_GRID_TEMPLATE_LAST };
+    col_dsc[0] = CONT_W_PER(30);
+    col_dsc[1] = CONT_W_PER(24);
+    col_dsc[3] = CONT_W_PER(10);
+
+    static int32_t row_dsc[] = {0, 0, 0, 0, 0, LV_GRID_TEMPLATE_LAST };
+    row_dsc[0] = CONT_H_PER(4);
+    row_dsc[1] = row_dsc[2] = CONT_H_PER(12);
+    row_dsc[3] = row_dsc[4] = CONT_H_PER(8);
 
     cont = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(cont);
     lv_obj_set_style_grid_column_dsc_array(cont, col_dsc, 0);
     lv_obj_set_style_grid_row_dsc_array(cont, row_dsc, 0);
-    lv_obj_set_size(cont, scr_width, SCALE_DPX(40));
+    lv_obj_set_size(cont, CONT_W, CONT_H);
     lv_obj_set_style_bg_color(cont, lv_color_make(0X88, 0X88, 0X88), 0);
     lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
-    lv_obj_set_pos(cont, 0, -SCALE_DPX(40));
+    lv_obj_set_pos(cont, 0, - CONT_H);
     lv_obj_set_layout(cont, LV_LAYOUT_GRID);
     lv_obj_set_scrollbar_mode(cont, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_pad_row(cont, 20, 0);
 #if USING_TOUCH_SWITCH
     lv_obj_add_event_cb(cont, cont_event_handler, LV_EVENT_ALL, NULL);
 #endif
 
-    create_tip_label(cont, "VAD", 1, 1);
-    create_switch(cont, vad_switch_event_handler, 1, 2, vad_is_enable());
-    create_tip_label(cont, "AEC", 1, 3);
-    create_switch(cont, aec_switch_event_handler, 1, 4, aec_is_enable());
+    create_tip_label(cont, "SW1", 1, 0);
+    create_switch(cont, vad_switch_event_handler, 1, 1, 1);
+    create_tip_label(cont, "SW2", 2, 0);
+    create_switch(cont, aec_switch_event_handler, 2, 1, 0);
+    create_tip_label(cont, "VOL", 3, 0);
+    create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
+    create_tip_label(cont, "BRT", 4, 0);
+    create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
 
     g_battery_fill = lv_obj_create(battery_outline);
     lv_obj_set_style_outline_width(g_battery_fill, 0, 0);
@@ -961,6 +1135,7 @@ void xiaozhi_ui_task(void *args)
         if (RT_EOK == rt_sem_trytake(&update_ui_sema))
         {
             ms = lv_task_handler();
+            switch_anim_timeout_check();
 
             char *current_text = lv_label_get_text(global_label1);
             /*

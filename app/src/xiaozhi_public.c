@@ -327,3 +327,18 @@ enum ListeningMode xz_get_mode(void)
     return aec_is_enable() ? kListeningModeAlwaysOn : kListeningModeManualStop;
 }
 
+
+void xz_set_lcd_brightness(uint16_t level)
+{
+    rt_device_t bl_device = rt_device_find("lcd");
+    RT_ASSERT(bl_device);
+
+    int ret = rt_device_open(bl_device, RT_DEVICE_OFLAG_RDWR);
+    if (ret == RT_EOK || ret == -RT_EBUSY)
+    {
+        rt_device_control(bl_device, RTGRAPHIC_CTRL_SET_BRIGHTNESS, &level);
+    }
+    if (bl_device != NULL && ret == RT_EOK)
+        rt_device_close(bl_device);
+}
+
