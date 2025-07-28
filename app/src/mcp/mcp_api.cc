@@ -16,6 +16,9 @@ extern "C"
 
     void MCP_RGBLED_CLOSE()
     {
+#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+        rt_pin_write(32, PIN_HIGH);
+#else
         if (RGBLEDTool::is_color_cycling_)
         {
             GetRGBLEDController().SetColor(0x000000);
@@ -23,6 +26,8 @@ extern "C"
             GetRGBLEDController().SetColor(0x000000);  // 关灯
             rt_thread_mdelay(100);
         }
+#endif
+
     }  
 
 

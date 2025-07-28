@@ -98,4 +98,5 @@ enum ListeningMode xz_get_mode(void);
 uint8_t xz_get_config_update(void);
 void xz_set_config_update(uint8_t en);
 void xz_set_lcd_brightness(uint16_t level);
+
 #endif // XIAOZHI_PUBLIC_H

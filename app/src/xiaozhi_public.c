@@ -342,3 +342,4 @@ void xz_set_lcd_brightness(uint16_t level)
         rt_device_close(bl_device);
 }
 
+
