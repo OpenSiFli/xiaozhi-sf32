@@ -1,3 +1,4 @@
+
 /*
  * SPDX-FileCopyrightText: 2024-2025 SiFli Technologies(Nanjing) Co., Ltd
  *
@@ -23,9 +24,18 @@
 #include "bt_env.h"
 #include "./iot/iot_c_api.h"
 #include "./mcp/mcp_api.h"
+#include "lv_timer.h"
+#include "lv_display.h"
+#include "lv_obj_pos.h"
+#include "lv_tiny_ttf.h"
+#include "lv_obj.h"
+#include "lv_label.h"
 #ifdef BSP_USING_PM
     #include "gui_app_pm.h"
 #endif // BSP_USING_PM
+#ifdef SF32LB52X
+    #include "bf0_mbox_common.h"
+#endif /* SF32LB52X */
 #include "xiaozhi_public.h"
 #define MAX_WSOCK_HDR_LEN 4096
 extern void xiaozhi_ui_update_ble(char *string);
@@ -39,6 +49,8 @@ extern void iot_initialize();                              // 初始化 IoT 模�
 extern void iot_invoke(const uint8_t *data, uint16_t len); // 执行远程命令
 extern const char *iot_get_descriptors_json();             // 获取设备描述
 extern const char *iot_get_states_json();                  // 获取设备状态
+
+extern void xz_mic_open(xz_audio_t *thiz);
 
 xiaozhi_ws_t g_xz_ws;
 rt_mailbox_t g_button_event_mb;
@@ -61,6 +73,33 @@ static const char *hello_message =
     "\"format\":\"opus\", \"sample_rate\":16000, \"channels\":1, "
     "\"frame_duration\":60"
     "}}";
+
+HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
+{
+    rt_kprintf("PowerDownCustom\n");
+    HAL_PMU_SelectWakeupPin(0, 19); // PA43
+    HAL_PMU_EnablePinWakeup(0, 0);
+    HAL_PIN_Set(PAD_PA24, GPIO_A24, PIN_PULLDOWN, 1);
+    for (uint32_t i = PAD_PA28; i <= PAD_PA44; i++)
+    {
+        HAL_PIN_Set(i, i - PAD_PA28 + GPIO_A28, PIN_PULLDOWN, 1);
+    }
+    BSP_GPIO_Set(26, 0, 1);
+    HAL_PIN_Set(26, GPIO_A26, PIN_PULLDOWN, 1);
+    BSP_GPIO_Set(0, 0, 1);
+    HAL_PIN_Set(0, GPIO_A0, PIN_PULLDOWN, 1);
+    BSP_GPIO_Set(1, 0, 1);
+    HAL_PIN_Set(1, GPIO_A1, PIN_PULLDOWN, 1);
+    BSP_GPIO_Set(42, 0, 1);  //Audio
+    BSP_GPIO_Set(38, 0, 1);  //sys1
+    hwp_pmuc->PERI_LDO &=  ~(PMUC_PERI_LDO_EN_LDO18 | PMUC_PERI_LDO_EN_VDD33_LDO2 | PMUC_PERI_LDO_EN_VDD33_LDO3);
+    hwp_pmuc->WKUP_CNT = 0x000F000F;
+
+    rt_hw_interrupt_disable();
+    rt_kprintf("PowerDownCustom2\n");
+    HAL_PMU_EnterHibernate();
+    rt_kprintf("PowerDownCustom3\n");
+}
 
 void parse_helLo(const u8_t *data, u16_t len);
 
@@ -380,21 +419,131 @@ void simulate_button_released()
     if(vad_is_enable())
         xz_button_event_handler(BSP_KEY1_PIN, BUTTON_RELEASED);
 }
+// 倒计时动画
+static volatile int countdown_anim_running = 0;
+static lv_obj_t *countdown_screen = NULL;
+static rt_thread_t countdown_thread = RT_NULL;
+
+static void countdown_thread_entry(void *parameter)
+{
+    extern struct rt_mutex lvgl_mutex;
+    rt_mutex_take(&lvgl_mutex, RT_WAITING_FOREVER);
+    countdown_anim_running = 1;
+
+    // 创建倒计时 screen
+    if (!countdown_screen) {
+        countdown_screen = lv_obj_create(NULL); // 新建一个screen
+        lv_obj_set_style_bg_color(countdown_screen, lv_color_hex(0x000000), 0);
+    }
+    // 清空screen
+    lv_obj_clean(countdown_screen);
+    lv_screen_load(countdown_screen);
+
+    // 创建顶部"准备关机"label
+    extern const unsigned char xiaozhi_font[];
+    extern const int xiaozhi_font_size;
+    int tip_font_size = 36;
+    lv_font_t *tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
+    static lv_style_t style_tip;
+    lv_style_init(&style_tip);
+    lv_style_set_text_font(&style_tip, tip_font);
+    lv_style_set_text_color(&style_tip, lv_color_hex(0xFFFFFF));
+    lv_obj_t *tip_label = lv_label_create(countdown_screen);
+    lv_label_set_text(tip_label, "准备关机");
+    lv_obj_add_style(tip_label, &style_tip, 0);
+    lv_obj_align(tip_label, LV_ALIGN_TOP_MID, 0, 20);
+
+    // 创建字体
+    int font_size = 120; 
+    lv_font_t *big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, font_size);
+    static lv_style_t style_big;
+    lv_style_init(&style_big);
+    lv_style_set_text_font(&style_big, big_font);
+    lv_style_set_text_color(&style_big, lv_color_hex(0xFFFFFF));
+
+    // 创建倒计时label
+    lv_obj_t *label = lv_label_create(countdown_screen);
+    lv_obj_add_style(label, &style_big, 0);
+    lv_obj_center(label);
+
+    for (int i = 3; i >= 1; --i)
+    {
+        char num[2] = {0};
+        snprintf(num, sizeof(num), "%d", i);
+        lv_label_set_text(label, num);
+        lv_obj_center(label);
+        lv_timer_handler();
+        rt_thread_mdelay(1000);
+    }
+
+    countdown_anim_running = 0;
+    rt_kprintf("ok\n");
+    rt_mutex_release(&lvgl_mutex);
+    rt_kprintf("showdown\n");
+    PowerDownCustom();
+    while (1) {};
+}
+
+static void xz_button2_event_handler(int32_t pin, button_action_t action)
+{
+    static rt_tick_t press_tick = 0;
+    if (action == BUTTON_PRESSED)
+    {
+        press_tick = rt_tick_get();
+        rt_kprintf("xz_button2_event_handler\n");
+    }
+    else if (action == BUTTON_RELEASED)
+    {
+        if (press_tick != 0 && !countdown_anim_running)
+        {
+            rt_tick_t now = rt_tick_get();
+            if ((now - press_tick) >= rt_tick_from_millisecond(3000))
+            {
+                // 长按3秒，启动倒计时动画
+                rt_kprintf("jzljhzlk\n");
+                
+                if (countdown_thread == RT_NULL) {
+                    countdown_thread = rt_thread_create("countdown", 
+                                                        countdown_thread_entry, 
+                                                        RT_NULL, 
+                                                        4096, 
+                                                        5,    
+                                                        10);
+                }
+                
+                if (countdown_thread != RT_NULL) {
+                    rt_thread_startup(countdown_thread);
+                }
+            }
+        }
+        press_tick = 0;
+    }
+}
+
 static void xz_button_init(void) // Session key
 {
     static int initialized = 0;
-
     if (initialized == 0)
     {
-        button_cfg_t cfg;
-        cfg.pin = BSP_KEY1_PIN;
+        // 按键1（对话+唤醒）
+        button_cfg_t cfg1;
+        cfg1.pin = BSP_KEY1_PIN;
+        cfg1.active_state = BSP_KEY1_ACTIVE_HIGH;
+        cfg1.mode = PIN_MODE_INPUT;
+        cfg1.button_handler = xz_button_event_handler; // Session key
+        int32_t id1 = button_init(&cfg1);
+        RT_ASSERT(id1 >= 0);
+        RT_ASSERT(SF_EOK == button_enable(id1));
 
-        cfg.active_state = BSP_KEY1_ACTIVE_HIGH;
-        cfg.mode = PIN_MODE_INPUT;
-        cfg.button_handler = xz_button_event_handler; // Session key
-        int32_t id = button_init(&cfg);
-        RT_ASSERT(id >= 0);
-        RT_ASSERT(SF_EOK == button_enable(id));
+        // 按键2（关机）
+        button_cfg_t cfg2;
+        cfg2.pin = 43;
+        cfg2.active_state = 1;
+        cfg2.mode = PIN_MODE_INPUT;
+        cfg2.button_handler = xz_button2_event_handler;
+        int32_t id2 = button_init(&cfg2);
+        RT_ASSERT(SF_EOK == button_enable(id2));
+        RT_ASSERT(id2 >= 0);
         initialized = 1;
     }
 }

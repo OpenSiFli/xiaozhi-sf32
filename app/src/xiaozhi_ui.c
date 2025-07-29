@@ -20,6 +20,9 @@
 #include "bt_env.h"
 #include "./mcp/mcp_api.h"
 #define IDLE_TIME_LIMIT  (10000)
+
+// 全局LVGL互斥锁
+struct rt_mutex lvgl_mutex;
 #define SHOW_TEXT_LEN 100
 #include "lv_seqimg.h"
 #include "xiaozhi_ui.h"
@@ -27,7 +30,15 @@
 
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
+
+// 开机动画相关全局变量
 static struct rt_semaphore update_ui_sema;
+extern const lv_image_dsc_t startup_logo;  //开机动画图标
+static lv_obj_t *g_startup_screen = NULL;
+static lv_obj_t *g_startup_img = NULL;
+static lv_anim_t g_startup_anim;
+static bool g_startup_animation_finished = false;
+
 /*Create style with the new font*/
 static lv_style_t style;
 static lv_style_t style_battery;
@@ -80,6 +91,8 @@ extern void ws_send_listen_start(void *ws, char *session_id,
                                  enum ListeningMode mode);
 extern void ws_send_listen_stop(void *ws, char *session_id);
 extern void send_xz_config_msg_to_main(void);
+extern void xz_mic_open(xz_audio_t *thiz);
+extern void xz_mic_close(xz_audio_t *thiz);
 extern xz_audio_t xz_audio;
 xz_audio_t *thiz = &xz_audio;
 extern rt_mailbox_t g_battery_mb;
@@ -98,6 +111,7 @@ static lv_obj_t *g_battery_label = NULL; // 电量标签
 
 #define BASE_WIDTH 390
 #define BASE_HEIGHT 450
+/*开机动画*/
 
 // 获取当前屏幕尺寸并计算缩放因子
 static float get_scale_factor(void)
@@ -111,6 +125,120 @@ static float get_scale_factor(void)
 
     return (scale_x < scale_y) ? scale_x : scale_y;
 }
+// 开机动画淡入淡出回调
+static void startup_fade_anim_cb(void *var, int32_t value)
+{
+    if (g_startup_img) {
+        lv_obj_set_style_img_opa(g_startup_img, (lv_opa_t)value, 0);
+    }
+}
+
+// 淡出完成回调
+static void startup_fadeout_ready_cb(struct _lv_anim_t* anim)
+{
+    // 隐藏开机画面
+    if (g_startup_screen) {
+        lv_obj_add_flag(g_startup_screen, LV_OBJ_FLAG_HIDDEN);
+    }
+    g_startup_animation_finished = true;
+    rt_kprintf("Startup animation completed\n");
+}
+
+// 定时器回调：用于延时后开始淡出动画
+static void startup_fadeout_timer_cb(lv_timer_t *timer)
+{
+    // 停止定时器
+    lv_timer_del(timer);
+    
+    // 开始淡出动画
+    lv_anim_init(&g_startup_anim);
+    lv_anim_set_var(&g_startup_anim, g_startup_img);
+    lv_anim_set_values(&g_startup_anim, 255, 0); // 淡出
+    lv_anim_set_time(&g_startup_anim, 800); // 0.8秒淡出
+    lv_anim_set_exec_cb(&g_startup_anim, startup_fade_anim_cb);
+    lv_anim_set_ready_cb(&g_startup_anim, startup_fadeout_ready_cb);
+    lv_anim_start(&g_startup_anim);
+    
+    rt_kprintf("Starting fadeout animation\n");
+}
+
+// 开机动画淡入完成回调
+static void startup_anim_ready_cb(struct _lv_anim_t* anim)
+{
+    // 使用LVGL定时器代替rt_thread_mdelay，避免在动画回调中阻塞
+    lv_timer_t *fadeout_timer = lv_timer_create(startup_fadeout_timer_cb, 1500, NULL);
+    lv_timer_set_repeat_count(fadeout_timer, 1); // 只执行一次
+    
+    rt_kprintf("Startup fadein completed, waiting 1.5s before fadeout\n");
+}
+
+// 创建开机动画 - 使用与蓝牙图标相同的方式
+static void create_startup_animation(void)
+{
+    rt_kprintf("Creating startup animation\n");
+    
+    // 检查startup_logo是否可用
+    if (&startup_logo == NULL) {
+        rt_kprintf("Warning: startup_logo not available, skipping animation\n");
+        g_startup_animation_finished = true;
+        return;
+    }
+    
+    // 使用信号量保护LVGL操作
+    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
+    
+    // 创建全屏启动画面
+    g_startup_screen = lv_obj_create(lv_screen_active());
+    if (!g_startup_screen) {
+        rt_kprintf("Error: Failed to create startup screen\n");
+        g_startup_animation_finished = true;
+        rt_sem_release(&update_ui_sema);
+        return;
+    }
+    
+    lv_obj_remove_style_all(g_startup_screen);
+    lv_obj_set_size(g_startup_screen, lv_disp_get_hor_res(NULL), lv_disp_get_ver_res(NULL));
+    lv_obj_set_style_bg_color(g_startup_screen, lv_color_hex(0x000000), 0); // 黑色背景
+    lv_obj_set_style_bg_opa(g_startup_screen, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(g_startup_screen, LV_OBJ_FLAG_CLICKABLE);
+    
+    // 创建图片对象 - 与蓝牙图标创建方式完全相同
+    g_startup_img = lv_img_create(g_startup_screen);
+    if (!g_startup_img) {
+        rt_kprintf("Error: Failed to create startup image\n");
+        lv_obj_del(g_startup_screen);
+        g_startup_screen = NULL;
+        g_startup_animation_finished = true;
+        rt_sem_release(&update_ui_sema);
+        return;
+    }
+    
+    lv_img_set_src(g_startup_img, &startup_logo);  // 使用相同的显示方式
+    lv_obj_center(g_startup_img); // 居中显示
+    lv_obj_set_style_img_opa(g_startup_img, LV_OPA_0, 0); // 初始完全透明
+    
+    // 设置图片大小 - 针对200×102分辨率的logo优化
+    // 保持宽高比 200:102 ≈ 1.96:1，在屏幕上显示为合适尺寸
+    lv_obj_set_size(g_startup_img, SCALE_DPX(180), SCALE_DPX(92)); // 宽180dp，高92dp
+    lv_img_set_zoom(g_startup_img, (int)(LV_SCALE_NONE * g_scale)); // 根据缩放因子缩放
+    
+    // 确保启动画面在最顶层
+    lv_obj_move_foreground(g_startup_screen);
+    
+    // 开始淡入动画
+    lv_anim_init(&g_startup_anim);
+    lv_anim_set_var(&g_startup_anim, g_startup_img);
+    lv_anim_set_values(&g_startup_anim, 0, 255); // 淡入
+    lv_anim_set_time(&g_startup_anim, 800); // 0.8秒淡入
+    lv_anim_set_exec_cb(&g_startup_anim, startup_fade_anim_cb);
+    lv_anim_set_ready_cb(&g_startup_anim, startup_anim_ready_cb);
+    lv_anim_start(&g_startup_anim);
+    
+    rt_sem_release(&update_ui_sema);
+    
+    rt_kprintf("Startup animation started\n");
+}
+
 
 static void switch_cont_anim(bool hidden);
 static void contdown_anim_ready_cb(struct _lv_anim_t* anim)
@@ -241,55 +369,44 @@ static void aec_switch_event_handler(struct _lv_event_t* e)
     send_xz_config_msg_to_main();
 }
 
-#if USING_BTN_SWITCH
-static void xz_ui_button_event_handler(int32_t pin, button_action_t action) {
-    static button_action_t last_action = BUTTON_RELEASED;
-    if (last_action == action) return;
-    last_action = action;
-    if (action == BUTTON_PRESSED) 
-    {
-        rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-        if(0 == (cont_status & CONT_IDLE)) return;
-        if(cont_status & CONT_HIDDEN)
-        {
-            switch_cont_anim(false);
-            cont_status &= (uint8_t)~CONT_HIDDEN;
-        }
-        else 
-        {
-            switch_cont_anim(true);
-            cont_status |= CONT_HIDDEN;
-        }
-        cont_status &= (uint8_t)(~CONT_IDLE);
-        rt_sem_release(&update_ui_sema);
-    } 
-    else if (action == BUTTON_RELEASED) 
-    {
 
-    }
-}
-
-static void xz_ui_button_init(void) // Session key
-{
-    static int initialized = 0;
-
-    if (initialized == 0)
-    {
-        button_cfg_t cfg;
-        cfg.pin = BSP_KEY2_PIN;
-        cfg.active_state = BSP_KEY1_ACTIVE_HIGH;
-        cfg.mode = PIN_MODE_INPUT;
-        cfg.button_handler = xz_ui_button_event_handler; // Session key
-        int32_t id = button_init(&cfg);
-        RT_ASSERT(id >= 0);
-        RT_ASSERT(SF_EOK == button_enable(id));
-        initialized = 1;
-    }
-}
-#endif
+// #if USING_BTN_SWITCH
+// // 只保留UI事件处理函数，供业务handler调用，不再注册button
+// void xz_ui_button_event_handler(int32_t pin, button_action_t action) {
+//     static button_action_t last_action = BUTTON_RELEASED;
+//     if (last_action == action) return;
+//     last_action = action;
+//     if (action == BUTTON_PRESSED) 
+//     {
+//         rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
+//         if(0 == (cont_status & CONT_IDLE)) {
+//             rt_sem_release(&update_ui_sema);
+//             return;
+//         }
+//         if(cont_status & CONT_HIDDEN)
+//         {
+//             switch_cont_anim(false);
+//             cont_status &= (uint8_t)~CONT_HIDDEN;
+//         }
+//         else 
+//         {
+//             switch_cont_anim(true);
+//             cont_status |= CONT_HIDDEN;
+//         }
+//         cont_status &= (uint8_t)(~CONT_IDLE);
+//         rt_sem_release(&update_ui_sema);
+//     } 
+//     else if (action == BUTTON_RELEASED) 
+//     {
+//         // 可根据需要扩展
+//     }
+// }
+// #endif
 
 rt_err_t xiaozhi_ui_obj_init()
 {
+    // 初始化LVGL互斥锁
+    rt_mutex_init(&lvgl_mutex, "lvgl", RT_IPC_FLAG_PRIO);
 
 
    
@@ -847,14 +964,6 @@ void xiaozhi_ui_task(void *args)
         return;
     }
 
-    // touch_device = rt_device_find(TOUCH_NAME);
-    // if(touch_device==RT_NULL)
-    // {
-    //     LOG_I("touch_device!=NULL!");
-    //     RT_ASSERT(0);
-    // }
-    // rt_device_control(touch_device, RTGRAPHIC_CTRL_POWEROFF, NULL);
-
 #ifdef BSP_USING_PM
     pm_ui_init();
 #endif
@@ -890,14 +999,14 @@ void xiaozhi_ui_task(void *args)
     {
         return;
     }
+    //开机动画
+    create_startup_animation();
 
     xiaozhi_ui_update_ble("close");
     xiaozhi_ui_chat_status("连接中...");
     xiaozhi_ui_chat_output("等待连接...");
     xiaozhi_ui_update_emoji("neutral");
-#if USING_BTN_SWITCH
-    xz_ui_button_init();
-#endif
+
 
     while (1)
     {
