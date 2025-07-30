@@ -61,6 +61,10 @@ void HAL_MspInit(void)
 #define WEBSOCKET_RECONNECT 3
 #define KEEP_FIRST_PAN_RECONNECT 5
 #define XZ_CONFIG_UPDATE        6
+#define BT_APP_PHONE_DISCONNECTED 7    // 手机主动断开
+#define BT_APP_ABNORMAL_DISCONNECT 8   // 异常断开
+#define BT_APP_RECONNECT_TIMEOUT 9    // 重连超时
+#define BT_APP_RECONNECT 10 // 重连
 #define PAN_TIMER_MS 3000
 
 bt_app_t g_bt_app_env;
@@ -68,6 +72,12 @@ rt_mailbox_t g_bt_app_mb;
 BOOL g_pan_connected = FALSE;
 BOOL first_pan_connected = FALSE;
 int first_reconnect_attempts = 0;
+
+static rt_timer_t s_reconnect_timer = NULL;
+static rt_timer_t s_sleep_timer = NULL;
+static int reconnect_attempts = 0;
+#define MAX_RECONNECT_ATTEMPTS 30  // 30次尝试，每次1秒，共30秒
+static uint8_t g_sleep_enter_flag = 0;    // 进入睡眠标志位
 
 #ifdef BSP_USING_BOARD_SF32LB52_XTY_AI
 static rt_timer_t s_pulse_encoder_timer = NULL;
@@ -234,6 +244,53 @@ int mnt_init(void)
 }
 INIT_ENV_EXPORT(mnt_init);
 #endif
+static void sleep_timer_timeout_handle(void *parameter)
+{
+    rt_kprintf("30 seconds timeout, set sleep enter flag\n");
+    g_sleep_enter_flag = 1;  // 设置进入睡眠标志位
+}
+static void start_sleep_timer(void)
+{
+    if (s_sleep_timer == RT_NULL) {
+        s_sleep_timer = rt_timer_create("sleep_timer", 
+                                        sleep_timer_timeout_handle,
+                                        RT_NULL, 
+                                        rt_tick_from_millisecond(30000),  // 30秒
+                                        RT_TIMER_FLAG_ONE_SHOT | RT_TIMER_FLAG_SOFT_TIMER);
+    } else {
+        rt_timer_stop(s_sleep_timer);
+        rt_timer_control(s_sleep_timer, RT_TIMER_CTRL_SET_TIME, (void *)&(rt_tick_t){rt_tick_from_millisecond(30000)});
+    }
+    
+    if (s_sleep_timer != RT_NULL) {
+        rt_timer_start(s_sleep_timer);
+        rt_kprintf("Sleep timer started, will trigger after 30 seconds\n");
+    } else {
+        rt_kprintf("Failed to create sleep timer\n");
+    }
+}
+static void reconnect_timeout_handle(void *parameter)
+{
+    rt_mb_send(g_bt_app_mb, BT_APP_RECONNECT);
+}
+
+static void start_reconnect_timer(void)
+{
+    if (s_reconnect_timer == NULL) {
+        s_reconnect_timer = rt_timer_create(
+            "reconnect", reconnect_timeout_handle, NULL,
+            rt_tick_from_millisecond(10000), // 1秒间隔
+            RT_TIMER_FLAG_PERIODIC);
+    }
+    
+    if (s_reconnect_timer) {
+        reconnect_attempts = 0;
+        rt_timer_start(s_reconnect_timer);
+        LOG_I("Start reconnect timer");
+    }
+}
+
+
 
 void keep_First_pan_connection()
 {
@@ -323,7 +380,8 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
         {
             bt_notify_device_base_info_t *info =
                 (bt_notify_device_base_info_t *)data;
-            LOG_I("disconnected(0x%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) res %d",
+            
+            LOG_I("disconnected(0x%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) res:%d",
                   info->mac.addr[5], info->mac.addr[4], info->mac.addr[3],
                   info->mac.addr[2], info->mac.addr[1], info->mac.addr[0],
                   info->res);
@@ -331,7 +389,18 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
 
             //  memset(&g_bt_app_env.bd_addr, 0xFF,
             //  sizeof(g_bt_app_env.bd_addr));
-
+                 if (info->res == BT_NOTIFY_COMMON_SCO_DISCONNECTED) 
+                {
+                
+                    LOG_I("Phone actively disconnected, prepare to enter sleep mode after 30 seconds");
+                    rt_mb_send(g_bt_app_mb, BT_APP_PHONE_DISCONNECTED);
+                }
+                else 
+                {
+                    LOG_I("Abnormal disconnection, start reconnect attempts");
+                    rt_mb_send(g_bt_app_mb, BT_APP_ABNORMAL_DISCONNECT);
+                }
+            
             if (g_bt_app_env.pan_connect_timer)
                 rt_timer_stop(g_bt_app_env.pan_connect_timer);
         }
@@ -601,7 +670,7 @@ _CONFIG_CHANGE:
         }
         else if (value == KEEP_FIRST_PAN_RECONNECT)
         {
-            keep_First_pan_connection(); // Ensure that the first pan connection
+            // keep_First_pan_connection(); // Ensure that the first pan connection
                                          // is successful
         }
 #ifdef XIAOZHI_USING_MQTT
@@ -639,6 +708,56 @@ _CONFIG_CHANGE:
         {
             rt_kprintf("XZ CONFIG CHANGED\r\n");
             goto _CONFIG_CHANGE;
+        }
+        else if(value == BT_APP_PHONE_DISCONNECTED)
+        {
+            rt_kprintf("Phone actively disconnected, enter sleep mode after 30 seconds\n");
+            start_sleep_timer();
+            //睡眠
+        }
+        else if(value == BT_APP_ABNORMAL_DISCONNECT)
+        {
+            rt_kprintf("Abnormal disconnection, start reconnect attempts\n");
+            rt_thread_mdelay(3000);
+            reconnect_attempts = 0;
+            start_reconnect_timer();
+        }
+        else if(value == BT_APP_RECONNECT_TIMEOUT)
+        {
+            rt_kprintf("Reconnect timeout, enter sleep mode\n");
+            g_sleep_enter_flag = 1;
+            //睡眠
+        }
+        else if(value == BT_APP_RECONNECT)
+        {
+            if (g_bt_app_env.bt_connected) 
+            {
+                // 已经重新连接成功，停止定时器
+                if (s_reconnect_timer) {
+                    rt_timer_stop(s_reconnect_timer);
+                }
+                reconnect_attempts = 0;
+                LOG_I("Reconnect successful, stop reconnect timer");
+            }
+            else
+            {
+                reconnect_attempts++;
+                LOG_I("Reconnect attempt %d/%d", reconnect_attempts, MAX_RECONNECT_ATTEMPTS);
+            }
+
+            if (reconnect_attempts <= MAX_RECONNECT_ATTEMPTS) 
+            {
+                bt_interface_conn_ext((char *)&g_bt_app_env.bd_addr, BT_PROFILE_HID);
+            }
+            else
+            {
+                LOG_I("Reconnect timeout, send timeout event");
+                rt_mb_send(g_bt_app_mb, BT_APP_RECONNECT_TIMEOUT);
+                reconnect_attempts = 0;
+                 if (s_reconnect_timer) {
+                        rt_timer_stop(s_reconnect_timer);
+                    }
+            }
         }
         else
         {
