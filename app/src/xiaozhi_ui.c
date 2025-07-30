@@ -61,17 +61,6 @@ static lv_obj_t *global_img_ble;
 static rt_timer_t g_split_text_timer = RT_NULL;
 static char g_second_part[512];
 static lv_obj_t *g_label_for_second_part = NULL;
-static lv_obj_t *cont = NULL;
-
-#define CONT_IDLE           0x01
-#define CONT_HIDDEN         0x02
-#define CONT_DEFAULT_STATUS     (CONT_IDLE | CONT_HIDDEN)
-#define USING_TOUCH_SWITCH  1
-#define USING_BTN_SWITCH    1
-
-
-static uint8_t cont_status = CONT_DEFAULT_STATUS;
-
 // xiaozhi2
 extern rt_mailbox_t g_button_event_mb;
 extern xiaozhi_ws_t g_xz_ws;
@@ -79,7 +68,6 @@ extern void ws_send_speak_abort(void *ws, char *session_id, int reason);
 extern void ws_send_listen_start(void *ws, char *session_id,
                                  enum ListeningMode mode);
 extern void ws_send_listen_stop(void *ws, char *session_id);
-extern void send_xz_config_msg_to_main(void);
 extern xz_audio_t xz_audio;
 xz_audio_t *thiz = &xz_audio;
 extern rt_mailbox_t g_battery_mb;
@@ -111,182 +99,6 @@ static float get_scale_factor(void)
 
     return (scale_x < scale_y) ? scale_x : scale_y;
 }
-
-static void switch_cont_anim(bool hidden);
-static void contdown_anim_ready_cb(struct _lv_anim_t* anim)
-{
-    switch_cont_anim(true);
-    cont_status |= CONT_HIDDEN;
-    cont_status &= (uint8_t)(~CONT_IDLE);
-    LOG_I("%s",__func__);
-
-}
-
-static void countdown_anim(void)
-{
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_delete(cont, NULL);
-    lv_anim_set_var(&a, cont);
-    lv_anim_set_values(&a, 0, 100);
-    lv_anim_set_duration(&a, 3000);
-    lv_anim_set_ready_cb(&a, contdown_anim_ready_cb);
-    lv_anim_start(&a);
-    LOG_I("%s",__func__);
-}
-
-static void countdown_anim_del(void)
-{
-    lv_anim_delete(cont, NULL);
-}
-
-static void switch_cont_anim_ready_cb(struct lv_anim_t* anim)
-{
-    lv_obj_t* obj = anim->var;
-    if(lv_obj_get_y(obj) + lv_obj_get_height(obj) > 0)
-    {
-        countdown_anim();
-    }
-    cont_status |= CONT_IDLE;
-    LOG_I("%s:status %d",__func__, cont_status);
-}
-
-static void switch_cont_anim(bool hidden)
-{
-    LOG_I("%s:hidden %d",__func__, hidden);
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, cont);
-    lv_anim_del(cont, NULL);
-    if (hidden)
-    {
-        lv_anim_set_values(&a, lv_obj_get_y(cont), -lv_obj_get_height(cont));
-        lv_anim_set_ready_cb(&a, switch_cont_anim_ready_cb);
-    }
-    else
-    {
-        lv_anim_set_values(&a, lv_obj_get_y(cont), 0);
-        lv_anim_set_ready_cb(&a, switch_cont_anim_ready_cb);
-    }
-    lv_anim_set_duration(&a, 200);
-    lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
-
-    lv_anim_start(&a);
-}
-
-
-static void header_row_event_handler(struct _lv_event_t* e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if(code == LV_EVENT_SHORT_CLICKED)
-        switch_cont_anim(false);
-}
-
-static lv_obj_t* create_tip_label(lv_obj_t* parent, const char* tips, uint8_t row, uint8_t col)
-{
-    lv_obj_t* obj = lv_obj_create(parent);
-    lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
-    lv_obj_remove_style_all(obj);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, col, 1,
-        LV_GRID_ALIGN_STRETCH, row, 1);
-    lv_obj_set_style_bg_opa(obj, 0, 0);
-    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
-
-    lv_obj_t* label = lv_label_create(obj);
-    lv_obj_add_style(label, &style, 0);
-    lv_label_set_text_fmt(label, tips);
-    lv_obj_center(label);
-    return label;
-}
-
-static lv_obj_t* create_switch(lv_obj_t* parent,lv_event_cb_t cb, uint8_t row, uint8_t col, uint8_t checked)
-{
-    lv_obj_t* sw = lv_switch_create(parent);
-    lv_obj_add_flag(sw, LV_OBJ_FLAG_EVENT_BUBBLE);
-    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, NULL);
-    lv_obj_set_grid_cell(sw, LV_GRID_ALIGN_STRETCH, col, 1,
-        LV_GRID_ALIGN_STRETCH, row, 1);
-    lv_obj_set_style_radius(sw, 200, 0);    //to avoid memory malloc failed
-    if(checked)
-        lv_obj_add_state(sw, LV_STATE_CHECKED);
-    return sw;
-}
-
-static void cont_event_handler(struct lv_event_t* e)
-{
-    lv_obj_t* cont = lv_event_get_current_target_obj(e);
-    lv_event_code_t code = lv_event_get_code(e);
-    if (lv_obj_get_y(cont) != 0) return;
-    if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST)
-    {
-        countdown_anim();
-    }
-    else if(code == LV_EVENT_PRESSED)
-    {
-        countdown_anim_del();
-    }
-}
-
-static void vad_switch_event_handler(struct _lv_event_t* e)
-{
-    lv_obj_t * obj = lv_event_get_current_target(e);
-    vad_set_enable(lv_obj_has_state(obj, LV_STATE_CHECKED));
-    send_xz_config_msg_to_main();
-}
-
-static void aec_switch_event_handler(struct _lv_event_t* e)
-{
-    lv_obj_t * obj = lv_event_get_current_target(e);
-    aec_set_enable(lv_obj_has_state(obj, LV_STATE_CHECKED));
-    send_xz_config_msg_to_main();
-}
-
-#if USING_BTN_SWITCH
-static void xz_ui_button_event_handler(int32_t pin, button_action_t action) {
-    static button_action_t last_action = BUTTON_RELEASED;
-    if (last_action == action) return;
-    last_action = action;
-    if (action == BUTTON_PRESSED) 
-    {
-        rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-        if(0 == (cont_status & CONT_IDLE)) return;
-        if(cont_status & CONT_HIDDEN)
-        {
-            switch_cont_anim(false);
-            cont_status &= (uint8_t)~CONT_HIDDEN;
-        }
-        else 
-        {
-            switch_cont_anim(true);
-            cont_status |= CONT_HIDDEN;
-        }
-        cont_status &= (uint8_t)(~CONT_IDLE);
-        rt_sem_release(&update_ui_sema);
-    } 
-    else if (action == BUTTON_RELEASED) 
-    {
-
-    }
-}
-
-static void xz_ui_button_init(void) // Session key
-{
-    static int initialized = 0;
-
-    if (initialized == 0)
-    {
-        button_cfg_t cfg;
-        cfg.pin = BSP_KEY2_PIN;
-        cfg.active_state = BSP_KEY1_ACTIVE_HIGH;
-        cfg.mode = PIN_MODE_INPUT;
-        cfg.button_handler = xz_ui_button_event_handler; // Session key
-        int32_t id = button_init(&cfg);
-        RT_ASSERT(id >= 0);
-        RT_ASSERT(SF_EOK == button_enable(id));
-        initialized = 1;
-    }
-}
-#endif
 
 rt_err_t xiaozhi_ui_obj_init()
 {
@@ -324,9 +136,6 @@ rt_err_t xiaozhi_ui_obj_init()
     header_row = lv_obj_create(main_container);
     lv_obj_remove_flag(header_row, LV_OBJ_FLAG_SCROLLABLE); // 关闭滚动条
     lv_obj_set_size(header_row, scr_width, SCALE_DPX(40));  // 固定高度为 40dp
-#if USING_TOUCH_SWITCH
-    lv_obj_add_event_cb(header_row, header_row_event_handler, LV_EVENT_ALL, NULL);
-#endif
 
     // 清除 header_row 的内边距和外边距
     lv_obj_set_style_pad_all(header_row, 0, 0);
@@ -345,7 +154,6 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_style_bg_opa(spacer, LV_OPA_0, 0);
     lv_obj_set_style_border_width(spacer, 0, 0);
     lv_obj_set_size(spacer, SCALE_DPX(40), LV_SIZE_CONTENT); // 宽度为 40dp
-    lv_obj_add_flag(spacer, LV_OBJ_FLAG_EVENT_BUBBLE);
 
     // BLE 图标 - 左上角
     global_img_ble = lv_img_create(header_row);
@@ -353,7 +161,6 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_size(global_img_ble, SCALE_DPX(24), SCALE_DPX(24)); // 24dp 图标
     lv_img_set_zoom(global_img_ble,
                     (int)(LV_SCALE_NONE * g_scale)); // 根据缩放因子缩放
-    lv_obj_add_flag(global_img_ble, LV_OBJ_FLAG_EVENT_BUBBLE);
 
     // Top Label - 居中显示
     global_label1 = lv_label_create(header_row);
@@ -376,33 +183,6 @@ rt_err_t xiaozhi_ui_obj_init()
     rt_kprintf("Battery outline sizedefualt: %d x %d\n", OUTLINE_W * g_scale, OUTLINE_H * g_scale);
     #endif //defualt
     lv_obj_add_flag(battery_outline, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-
-    static int32_t col_dsc[] = {0, LV_GRID_FR(1), 0, LV_GRID_FR(1), 0, 0, LV_GRID_TEMPLATE_LAST };
-    col_dsc[2] = col_dsc[4] = SCALE_DPX(50);
-    col_dsc[0] = col_dsc[5] = SCALE_DPX(10);
-    static int32_t row_dsc[] = {0, 0, LV_GRID_TEMPLATE_LAST };
-    row_dsc[0] = SCALE_DPX(8);
-    row_dsc[1] = SCALE_DPX(25);
-
-    cont = lv_obj_create(lv_screen_active());
-    lv_obj_remove_style_all(cont);
-    lv_obj_set_style_grid_column_dsc_array(cont, col_dsc, 0);
-    lv_obj_set_style_grid_row_dsc_array(cont, row_dsc, 0);
-    lv_obj_set_size(cont, scr_width, SCALE_DPX(40));
-    lv_obj_set_style_bg_color(cont, lv_color_make(0X88, 0X88, 0X88), 0);
-    lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
-    lv_obj_set_pos(cont, 0, -SCALE_DPX(40));
-    lv_obj_set_layout(cont, LV_LAYOUT_GRID);
-    lv_obj_set_scrollbar_mode(cont, LV_SCROLLBAR_MODE_OFF);
-#if USING_TOUCH_SWITCH
-    lv_obj_add_event_cb(cont, cont_event_handler, LV_EVENT_ALL, NULL);
-#endif
-
-    create_tip_label(cont, "VAD", 1, 1);
-    create_switch(cont, vad_switch_event_handler, 1, 2, vad_is_enable());
-    create_tip_label(cont, "AEC", 1, 3);
-    create_switch(cont, aec_switch_event_handler, 1, 4, aec_is_enable());
 
     g_battery_fill = lv_obj_create(battery_outline);
     lv_obj_set_style_outline_width(g_battery_fill, 0, 0);
@@ -895,9 +675,6 @@ void xiaozhi_ui_task(void *args)
     xiaozhi_ui_chat_status("连接中...");
     xiaozhi_ui_chat_output("等待连接...");
     xiaozhi_ui_update_emoji("neutral");
-#if USING_BTN_SWITCH
-    xz_ui_button_init();
-#endif
 
     while (1)
     {
@@ -920,15 +697,13 @@ void xiaozhi_ui_task(void *args)
                     {
                         rt_kprintf("vad_enabled\n");
                         thiz->vad_enabled = true;
-                        if(aec_is_enable())
-                            xz_aec_mic_open(thiz);
-                        else
-                            xz_mic_open(thiz);
+                        xz_aec_mic_open(thiz);    
                     }
-#endif
+#endif                       
+
                 }
                 ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id,
-                                     xz_get_mode());
+                                     kListeningModeManualStop);
                 xiaozhi_ui_chat_status("聆听中...");
                 xz_mic(1);
                 break;
@@ -975,14 +750,8 @@ void xiaozhi_ui_task(void *args)
                     thiz->vad_enabled = false;
                     rt_kprintf("in PM,so vad_close\n");
                 } 
-                if(aec_is_enable())
-                {
-                    xz_aec_mic_close(thiz);
-                }
-                else
-                {
-                    xz_mic_close(thiz);
-                }
+
+                xz_aec_mic_close(thiz);
                 LOG_I("xz_aec_speaker_close \n");
 
                 bt_interface_wr_link_policy_setting(
