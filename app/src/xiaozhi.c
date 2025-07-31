@@ -474,33 +474,6 @@ int mqtt_http_xiaozhi_data_parse(char *json_data)
     return 0;
 }
 
-void xiaozhi_deinit(void)
-{
-    if (g_xz_context.info.tls_config)
-    {
-        LOCK_TCPIP_CORE();
-        mqtt_disconnect(&(g_xz_context.clnt));
-        UNLOCK_TCPIP_CORE();
-        if (g_xz_context.info.tls_config)
-        {
-            LOCK_TCPIP_CORE();
-            altcp_tls_free_config(g_xz_context.info.tls_config);
-            UNLOCK_TCPIP_CORE();
-            g_xz_context.info.tls_config = NULL;
-        }
-    }
-//    if(!aec_is_enable())
-//    {
-//        xz_mic(0);
-//    }
-//    else
-//    {
-//        xz_aec_mic_close(thiz);
-//    }
-//    xz_speaker_close(thiz);
-
-}
-
 void xiaozhi(int argc, char **argv)
 {
     char *my_ota_version;

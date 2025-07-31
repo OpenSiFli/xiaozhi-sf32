@@ -24,9 +24,7 @@ extern void xiaozhi_ui_chat_output(char *string);
 
 extern void xiaozhi_ui_task(void *args);
 extern void xiaozhi(int argc, char **argv);
-extern void xiaozhi_deinit(void);
 extern void xiaozhi2(int argc, char **argv);
-extern void xiaozhi2_deinit(void);
 extern void reconnect_websocket();
 extern xiaozhi_ws_t g_xz_ws;
 extern rt_mailbox_t g_button_event_mb;
@@ -60,7 +58,6 @@ void HAL_MspInit(void)
 #define BT_APP_CONNECT_PAN_SUCCESS 2
 #define WEBSOCKET_RECONNECT 3
 #define KEEP_FIRST_PAN_RECONNECT 5
-#define XZ_CONFIG_UPDATE        6
 #define PAN_TIMER_MS 3000
 
 bt_app_t g_bt_app_env;
@@ -461,11 +458,6 @@ uint32_t bt_get_class_of_device()
            BT_PERIPHERAL_REMCONTROL;
 }
 
-void send_xz_config_msg_to_main(void)
-{
-    rt_mb_send(g_bt_app_mb, XZ_CONFIG_UPDATE);
-}
-
 int main(void)
 {
     // 初始化邮箱
@@ -534,24 +526,6 @@ int main(void)
         return -1;
     }
 #endif
-
-_CONFIG_CHANGE:
-    if(xz_get_config_update())
-    {
-#ifdef XIAOZHI_USING_MQTT
-        xiaozhi_deinit();
-        xiaozhi(0, NULL);
-#else
-        xiaozhi2_deinit(); // Start Xiaozhi
-        xiaozhi2(0, NULL);
-#endif
-        if(kListeningModeAlwaysOn == xz_get_mode())
-        {
-            rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
-        }
-        xz_set_config_update(0);
-    }
-
     while (1)
     {
 
@@ -636,11 +610,6 @@ _CONFIG_CHANGE:
                 pan_reconnect(); // Triple reconnection of pan
             }
         }
-        else if(value == XZ_CONFIG_UPDATE)
-        {
-            rt_kprintf("XZ CONFIG CHANGED\r\n");
-            goto _CONFIG_CHANGE;
-        }
         else
         {
             rt_kprintf("WEBSOCKET_DISCONNECT\r\n");
@@ -650,8 +619,6 @@ _CONFIG_CHANGE:
     }
     return 0;
 }
-
-#ifdef RT_USING_FINSH
 
 static void pan_cmd(int argc, char **argv)
 {
@@ -667,28 +634,3 @@ static void pan_cmd(int argc, char **argv)
         bt_app_connect_pan_timeout_handle(NULL);
 }
 MSH_CMD_EXPORT(pan_cmd, Connect PAN to last paired device);
-
-void xiaozhi_setting(int argc, char **argv)
-{
-    if(argc < 3) return;
-    if(!strcmp(argv[1], "vad"))
-    {
-        uint8_t en = atoi(argv[2]) == 0 ? 0 : 1;
-        if(en != vad_is_enable())
-        {
-            vad_set_enable(en);
-            rt_mb_send(g_bt_app_mb, XZ_CONFIG_UPDATE);
-            rt_kprintf("%s: vad %d\r\n",__func__, en);
-        }
-    }
-    else if(!strcmp(argv[1], "aec"))
-    {
-        uint8_t en = atoi(argv[2]) == 0 ? 0 : 1;
-        aec_set_enable(en);
-        rt_mb_send(g_bt_app_mb, XZ_CONFIG_UPDATE);
-        rt_kprintf("%s: aec %d\r\n",__func__, en);
-    }
-}
-MSH_CMD_EXPORT(xiaozhi_setting, Set Xiaozhi)
-#endif
-

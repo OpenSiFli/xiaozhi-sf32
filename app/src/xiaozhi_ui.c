@@ -68,6 +68,7 @@ static lv_obj_t *global_img_ble;
 static rt_timer_t g_split_text_timer = RT_NULL;
 static char g_second_part[512];
 static lv_obj_t *g_label_for_second_part = NULL;
+
 static lv_obj_t *cont = NULL;
 
 #define CONT_IDLE           0x01
@@ -82,6 +83,7 @@ static uint8_t cont_status = CONT_DEFAULT_STATUS;
 static uint32_t anim_tick = 0;
 
 
+
 // xiaozhi2
 extern rt_mailbox_t g_button_event_mb;
 extern xiaozhi_ws_t g_xz_ws;
@@ -89,9 +91,11 @@ extern void ws_send_speak_abort(void *ws, char *session_id, int reason);
 extern void ws_send_listen_start(void *ws, char *session_id,
                                  enum ListeningMode mode);
 extern void ws_send_listen_stop(void *ws, char *session_id);
+
 extern void send_xz_config_msg_to_main(void);
 extern void xz_mic_open(xz_audio_t *thiz);
 extern void xz_mic_close(xz_audio_t *thiz);
+
 extern xz_audio_t xz_audio;
 xz_audio_t *thiz = &xz_audio;
 extern rt_mailbox_t g_battery_mb;
@@ -590,9 +594,6 @@ rt_err_t xiaozhi_ui_obj_init()
     header_row = lv_obj_create(main_container);
     lv_obj_remove_flag(header_row, LV_OBJ_FLAG_SCROLLABLE); // 关闭滚动条
     lv_obj_set_size(header_row, scr_width, SCALE_DPX(40));  // 固定高度为 40dp
-#if USING_TOUCH_SWITCH
-    lv_obj_add_event_cb(header_row, header_row_event_handler, LV_EVENT_ALL, NULL);
-#endif
 
     // 清除 header_row 的内边距和外边距
     lv_obj_set_style_pad_all(header_row, 0, 0);
@@ -611,7 +612,6 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_style_bg_opa(spacer, LV_OPA_0, 0);
     lv_obj_set_style_border_width(spacer, 0, 0);
     lv_obj_set_size(spacer, SCALE_DPX(40), LV_SIZE_CONTENT); // 宽度为 40dp
-    lv_obj_add_flag(spacer, LV_OBJ_FLAG_EVENT_BUBBLE);
 
     // BLE 图标 - 左上角
     global_img_ble = lv_img_create(header_row);
@@ -619,7 +619,6 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_size(global_img_ble, SCALE_DPX(24), SCALE_DPX(24)); // 24dp 图标
     lv_img_set_zoom(global_img_ble,
                     (int)(LV_SCALE_NONE * g_scale)); // 根据缩放因子缩放
-    lv_obj_add_flag(global_img_ble, LV_OBJ_FLAG_EVENT_BUBBLE);
 
     // Top Label - 居中显示
     global_label1 = lv_label_create(header_row);
@@ -643,6 +642,7 @@ rt_err_t xiaozhi_ui_obj_init()
                OUTLINE_H * g_scale);
 #endif // defualt
     lv_obj_add_flag(battery_outline, LV_OBJ_FLAG_EVENT_BUBBLE);
+
 
 #define CONT_W          scr_width
 #define CONT_H          scr_height
@@ -1175,6 +1175,7 @@ void xiaozhi_ui_task(void *args)
     xiaozhi_ui_update_emoji("neutral");
 
 
+
     while (1)
     {
         rt_uint32_t btn_event;
@@ -1247,15 +1248,13 @@ void xiaozhi_ui_task(void *args)
                     {
                         rt_kprintf("vad_enabled\n");
                         thiz->vad_enabled = true;
-                        if(aec_is_enable())
-                            xz_aec_mic_open(thiz);
-                        else
-                            xz_mic_open(thiz);
+                        xz_aec_mic_open(thiz);    
                     }
-#endif
+#endif                       
+
                 }
                 ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id,
-                                     xz_get_mode());
+                                     kListeningModeManualStop);
                 xiaozhi_ui_chat_status("聆听中...");
                 xz_mic(1);
                 break;
@@ -1303,14 +1302,8 @@ void xiaozhi_ui_task(void *args)
                     thiz->vad_enabled = false;
                     rt_kprintf("in PM,so vad_close\n");
                 } 
-                if(aec_is_enable())
-                {
-                    xz_aec_mic_close(thiz);
-                }
-                else
-                {
-                    xz_mic_close(thiz);
-                }
+
+                xz_aec_mic_close(thiz);
                 LOG_I("xz_aec_speaker_close \n");
 
                 bt_interface_wr_link_policy_setting(
