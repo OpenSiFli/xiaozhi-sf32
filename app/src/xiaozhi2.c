@@ -227,14 +227,14 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
         }
         else
         {
-#ifdef BSP_USING_PM
-            // 关闭 VAD
-            if(thiz->vad_enabled)
-            {
-                thiz->vad_enabled = false;
-                rt_kprintf("web_cloae,so vad_close\n");
-            }
-#endif      
+//  #ifdef BSP_USING_PM
+//             // 关闭 VAD
+//             if(thiz->vad_enabled)
+//             {
+//                 thiz->vad_enabled = false;
+//                 rt_kprintf("web_cloae,so vad_close\n");
+//             }
+//  #endif      
             MCP_RGBLED_CLOSE();
 
             xiaozhi_ui_chat_status("休眠中...");
@@ -346,14 +346,14 @@ static void xz_button_event_handler(int32_t pin, button_action_t action) {
         // 1. 检查是否处于睡眠状态（WebSocket未连接）
         if (!g_xz_ws.is_connected) {
             // 先执行唤醒（PAN重连）
-#ifdef BSP_USING_PM
-            rt_kprintf("web_open,so vad_enabled\n");
-            if(!thiz->vad_enabled)
-            {
-                thiz->vad_enabled = true;
-                xz_aec_mic_open(thiz);
-            }
-#endif            
+// #ifdef BSP_USING_PM
+//             rt_kprintf("web_open,so vad_enabled\n");
+//             if(!thiz->vad_enabled)
+//             {
+//                 thiz->vad_enabled = true;
+//                 xz_aec_mic_open(thiz);
+//             }
+// #endif            
             rt_mb_send(g_bt_app_mb, PAN_RECONNECT);
             xiaozhi_ui_chat_status("唤醒中...");
         } 

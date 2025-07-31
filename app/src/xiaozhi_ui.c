@@ -19,10 +19,11 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "./mcp/mcp_api.h"
-#define IDLE_TIME_LIMIT  (30000)
+#define IDLE_TIME_LIMIT  (90000)
 #define SHOW_TEXT_LEN 100
 #include "lv_seqimg.h"
 #include "xiaozhi_ui.h"
+
 
 
 #define LCD_DEVICE_NAME "lcd"
@@ -124,24 +125,7 @@ static const uint16_t brigtness_tb[] =
 #define BASE_WIDTH 390
 #define BASE_HEIGHT 450
 
-HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
-{
-    rt_kprintf("PowerDownCustom\n");
-    HAL_PMU_SelectWakeupPin(0, 19); // PA43
-    HAL_PMU_EnablePinWakeup(0, 0);
-    HAL_PIN_Set(PAD_PA24, GPIO_A24, PIN_PULLDOWN, 1);
-    for (uint32_t i = PAD_PA28; i <= PAD_PA44; i++)
-    {
-        HAL_PIN_Set(i, i - PAD_PA28 + GPIO_A28, PIN_PULLDOWN, 1);
-    }
-    hwp_pmuc->PERI_LDO &=  ~(PMUC_PERI_LDO_EN_LDO18 | PMUC_PERI_LDO_EN_VDD33_LDO2 | PMUC_PERI_LDO_EN_VDD33_LDO3);
-    hwp_pmuc->WKUP_CNT = 0x000F000F;
 
-    rt_hw_interrupt_disable();
-    rt_kprintf("PowerDownCustom2\n");
-    HAL_PMU_EnterHibernate();
-    rt_kprintf("PowerDownCustom3\n");
-}
 /*开机动画*/
 
 // 获取当前屏幕尺寸并计算缩放因子
@@ -1038,6 +1022,12 @@ static void pm_event_handler(gui_pm_event_type_t event)
     case GUI_PM_EVT_RESUME:
     {
         lv_timer_enable(true);
+        if (!thiz->vad_enabled)
+        {
+            thiz->vad_enabled = true;
+            xz_aec_mic_open(thiz);
+            rt_kprintf("PM resume: mic reopened\n");
+        }
         break;
     }
     default:
@@ -1116,7 +1106,7 @@ void xiaozhi_ui_task(void *args)
     rt_err_t ret = RT_EOK;
     rt_uint32_t ms;
     static rt_device_t touch_device;
-    
+    static rt_tick_t last_listen_tick = 0;
     rt_sem_init(&update_ui_sema, "update_ui", 1, RT_IPC_FLAG_FIFO);
     // 初始化UI消息邮箱
     if (g_ui_task_mb == RT_NULL) {
@@ -1243,6 +1233,7 @@ void xiaozhi_ui_task(void *args)
                     ws_send_speak_abort(&g_xz_ws.clnt, g_xz_ws.session_id,
                                         kAbortReasonWakeWordDetected);
                     xz_speaker(0); // 关闭扬声器
+                    rt_kprintf("vad_enabled jjjjjk\n");
 #ifdef BSP_USING_PM
                     if(!thiz->vad_enabled)
                     {
@@ -1257,6 +1248,7 @@ void xiaozhi_ui_task(void *args)
                                      kListeningModeManualStop);
                 xiaozhi_ui_chat_status("聆听中...");
                 xz_mic(1);
+                last_listen_tick = rt_tick_get(); // 记录“聆听中”开始时间
                 break;
 
             case BUTTON_EVENT_RELEASED:
@@ -1283,12 +1275,30 @@ void xiaozhi_ui_task(void *args)
             switch_anim_timeout_check();
 
             char *current_text = lv_label_get_text(global_label1);
-            /*
-                    if (current_text)
+
+            // 低功耗判断
+            if (g_xz_ws.is_connected == 0 && last_listen_tick > 0)
+            {
+                rt_tick_t now = rt_tick_get();
+                if ((now - last_listen_tick) > rt_tick_from_millisecond(3000))
+                {
+                    LOG_I("Websocket disconnected, entering low power mode");
+                    
+                    if(thiz->vad_enabled)
                     {
-                        rt_kprintf("Label text: %s\n", current_text);
+                        thiz->vad_enabled = false;
+                        rt_kprintf("in zudon_PM,so vad_close\n");
+                        xz_aec_mic_close(thiz);
                     }
-            */
+                    bt_interface_wr_link_policy_setting(
+                    (unsigned char *)&g_bt_app_env.bd_addr,
+                    BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
+                    MCP_RGBLED_CLOSE(); 
+                    gui_pm_fsm(GUI_PM_ACTION_SLEEP);
+                    last_listen_tick = 0; 
+                }
+            }
+
 #ifdef BSP_USING_PM
             if (strcmp(current_text, "聆听中...") == 0)
             {
@@ -1301,9 +1311,8 @@ void xiaozhi_ui_task(void *args)
                 {
                     thiz->vad_enabled = false;
                     rt_kprintf("in PM,so vad_close\n");
+                    xz_aec_mic_close(thiz);
                 } 
-
-                xz_aec_mic_close(thiz);
                 LOG_I("xz_aec_speaker_close \n");
 
                 bt_interface_wr_link_policy_setting(

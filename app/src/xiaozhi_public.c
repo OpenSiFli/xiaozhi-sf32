@@ -68,7 +68,24 @@ static uint8_t g_config_change = 0;
 char mac_address_string[20];
 char client_id_string[40];
 ALIGN(4) uint8_t g_sha256_result[32] = {0};
+HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
+{
+    rt_kprintf("PowerDownCustom\n");
+    HAL_PMU_SelectWakeupPin(0, 19); // PA43
+    HAL_PMU_EnablePinWakeup(0, 0);
+    HAL_PIN_Set(PAD_PA24, GPIO_A24, PIN_PULLDOWN, 1);
+    for (uint32_t i = PAD_PA28; i <= PAD_PA44; i++)
+    {
+        HAL_PIN_Set(i, i - PAD_PA28 + GPIO_A28, PIN_PULLDOWN, 1);
+    }
+    hwp_pmuc->PERI_LDO &=  ~(PMUC_PERI_LDO_EN_LDO18 | PMUC_PERI_LDO_EN_VDD33_LDO2 | PMUC_PERI_LDO_EN_VDD33_LDO3);
+    hwp_pmuc->WKUP_CNT = 0x000F000F;
 
+    rt_hw_interrupt_disable();
+    rt_kprintf("PowerDownCustom2\n");
+    HAL_PMU_EnterHibernate();
+    rt_kprintf("PowerDownCustom3\n");
+}
 char *get_mac_address()
 {
     if (mac_address_string[0] == '\0')

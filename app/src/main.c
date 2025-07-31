@@ -15,7 +15,7 @@
     #include "gui_app_pm.h"
 #endif // BSP_USING_PM
 #include "xiaozhi_public.h"
-
+#include "bf0_pm.h"
 #include <drivers/rt_drv_encoder.h>
 extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
@@ -194,7 +194,7 @@ static void battery_level_task(void *parameter)
         }
 
         rt_mb_send(g_battery_mb, battery_percentage);
-        rt_thread_mdelay(2000);
+        rt_thread_mdelay(5000);
     }
 }
 
@@ -527,8 +527,64 @@ uint32_t bt_get_class_of_device()
            BT_PERIPHERAL_REMCONTROL;
 }
 
+static void check_poweron_reason(void)
+{
+    switch (SystemPowerOnModeGet())
+    {
+    case PM_REBOOT_BOOT:
+    case PM_COLD_BOOT:
+    {
+        // power on as normal
+        break;
+    }
+    case PM_HIBERNATE_BOOT:
+    case PM_SHUTDOWN_BOOT:
+    {
+        if (PMUC_WSR_RTC & pm_get_wakeup_src())
+        {
+            // RTC唤醒
+            NVIC_EnableIRQ(RTC_IRQn);
+            // power on as normal
+        }
+#ifdef BSP_USING_CHARGER
+        else if ((PMUC_WSR_PIN0 << (pm_get_charger_pin_wakeup())) & pm_get_wakeup_src())
+        {
+        }
+#endif
+        else if (PMUC_WSR_PIN_ALL & pm_get_wakeup_src())
+        {
+            rt_thread_mdelay(2500); // 延时2.5秒
+            int val = rt_pin_read(43);
+            rt_kprintf("Power key(PA43) level after 2.5s: %d\n", val);
+            if (val != BSP_KEY2_ACTIVE_HIGH)
+            {
+                // 按键已松开，认为是误触发，直接关机
+                rt_kprintf("Not long press, shutdown now.\n");
+                PowerDownCustom();
+                while (1) {};
+            }
+            else
+            {
+                // 长按，正常开机
+                rt_kprintf("Long press detected, power on as normal.\n");
+            }
+        }
+        else if (0 == pm_get_wakeup_src())
+        {
+            RT_ASSERT(0);
+        }
+        break;
+    }
+    default:
+    {
+        RT_ASSERT(0);
+    }
+    }
+}
+
 int main(void)
 {
+    check_poweron_reason();
     // 初始化邮箱
     g_button_event_mb = rt_mb_create("btn_evt", 8, RT_IPC_FLAG_FIFO);
     if (g_button_event_mb == NULL)
