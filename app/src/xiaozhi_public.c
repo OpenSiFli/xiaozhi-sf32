@@ -61,8 +61,8 @@ static const char *ota_version =
     "}\r\n";
 
 // 公共变量定义
-static uint8_t g_en_vad = 0;
-static uint8_t g_en_aec = 0;
+static uint8_t g_en_vad = 1;
+static uint8_t g_en_aec = 1;
 static uint8_t g_config_change = 0;
 char mac_address_string[20];
 char client_id_string[40];
