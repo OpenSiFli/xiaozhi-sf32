@@ -1181,11 +1181,11 @@ void xiaozhi_ui_task(void *args)
                         }
                         else if (strcmp(msg->data, "happy") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, happy, sizeof(happy) / sizeof(happy[0]));
+                            lv_seqimg_src_array(seqimg, funny, sizeof(funny) / sizeof(funny[0]));
                         }
                         else if (strcmp(msg->data, "laughing") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, laughing, sizeof(neutral) / sizeof(neutral[0]));
+                            lv_seqimg_src_array(seqimg, funny, sizeof(funny) / sizeof(funny[0]));
                         }
                         else if (strcmp(msg->data, "funny") == 0)
                         {
@@ -1193,7 +1193,7 @@ void xiaozhi_ui_task(void *args)
                         }
                         else if (strcmp(msg->data, "sad") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, sad, sizeof(sad) / sizeof(sad[0]));
+                            lv_seqimg_src_array(seqimg, crying, sizeof(crying) / sizeof(crying[0]));
                         }
                         else if (strcmp(msg->data, "angry") == 0)
                         {
@@ -1217,7 +1217,7 @@ void xiaozhi_ui_task(void *args)
                         }
                         else if (strcmp(msg->data, "shocked") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, shocked, sizeof(shocked) / sizeof(shocked[0]));
+                            lv_seqimg_src_array(seqimg, surprised, sizeof(surprised) / sizeof(surprised[0]));
                         }
                         else if (strcmp(msg->data, "thinking") == 0)
                         {
@@ -1225,7 +1225,7 @@ void xiaozhi_ui_task(void *args)
                         }
                         else if (strcmp(msg->data, "winking") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, winking, sizeof(winking) / sizeof(winking[0]));
+                            lv_seqimg_src_array(seqimg, loving, sizeof(loving) / sizeof(loving[0]));
                         }
                         else if (strcmp(msg->data, "cool") == 0)
                         {
@@ -1233,11 +1233,11 @@ void xiaozhi_ui_task(void *args)
                         }
                         else if (strcmp(msg->data, "relaxed") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, relaxed, sizeof(relaxed) / sizeof(relaxed[0]));
+                            lv_seqimg_src_array(seqimg, cool, sizeof(cool) / sizeof(cool[0]));
                         }
                         else if (strcmp(msg->data, "delicious") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, delicious, sizeof(delicious) / sizeof(delicious[0]));
+                            lv_seqimg_src_array(seqimg, loving, sizeof(loving) / sizeof(loving[0]));
                         }
                         else if (strcmp(msg->data, "kissy") == 0)
                         {
@@ -1245,7 +1245,7 @@ void xiaozhi_ui_task(void *args)
                         }
                         else if (strcmp(msg->data, "confident") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, confident, sizeof(confident) / sizeof(confident[0]));
+                            lv_seqimg_src_array(seqimg, cool, sizeof(cool) / sizeof(cool[0]));
                         }
                         else if (strcmp(msg->data, "sleepy") == 0)
                         {
@@ -1253,11 +1253,11 @@ void xiaozhi_ui_task(void *args)
                         }
                         else if (strcmp(msg->data, "silly") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, silly, sizeof(silly) / sizeof(silly[0]));
+                            lv_seqimg_src_array(seqimg, thinking, sizeof(thinking) / sizeof(thinking[0]));
                         }
                         else if (strcmp(msg->data, "confused") == 0)
                         {
-                            lv_seqimg_src_array(seqimg, confused, sizeof(confused) / sizeof(confused[0]));
+                            lv_seqimg_src_array(seqimg, thinking, sizeof(thinking) / sizeof(thinking[0]));
                         }
                         else
                         {
