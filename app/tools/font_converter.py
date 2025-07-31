@@ -21,7 +21,7 @@ def font_to_c_array(font_file_path, array_name="xiaozhi_font"):
     
     font_size = len(font_data)
     
-    c_content = f"const unsigned char {array_name}[{font_size}] = {{\n"
+    c_content = f" __attribute__((section(\".font_data\"))) const unsigned char {array_name}[{font_size}] = {{\n"
     
     # 将字体数据转换为C数组格式，每行12个字节
     bytes_per_line = 12

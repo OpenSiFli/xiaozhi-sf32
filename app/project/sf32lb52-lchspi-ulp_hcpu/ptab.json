@@ -28,7 +28,7 @@
             }, 
             {
                 "offset": "0x00020000", 
-                "max_size": "0x00D00000", 
+                "max_size": "0x00200000", 
                 "tags": [
                     "HCPU_FLASH_CODE"
                 ], 
@@ -39,22 +39,38 @@
                         "xip"
                     ]
                 }, 
-                "img": "main",
+                "img": "main:ER_IROM1.bin",
                 "exec": "main"
             }, 
             {
-                "offset": "0x00D20000", 
+                "offset": "0x00220000", 
                 "max_size": "0x00004000", 
                 "tags": [
                     "KVDB_DFU_REGION"
                 ]
             }, 
             {
-                "offset": "0x00D24000", 
+                "offset": "0x00224000", 
                 "max_size": "0x00004000", 
                 "tags": [
                     "KVDB_BLE_REGION"
                 ]
+            },
+            {
+                "offset": "0x00228000",
+                "max_size": "0x800000",
+                "tags": [
+                    "EZIP_IMAGE_DATA"
+                ],
+                "img": "main:ER_IROM3.bin"
+            },
+            {
+                "offset": "0x00A28000",
+                "max_size": "0x500000",
+                "tags": [
+                    "FONT_DATA"
+                ],
+                "img": "main:ER_IROM2.bin"
             }
         ]
     }, 

@@ -15,7 +15,9 @@
             {
                 "offset": "0x00010000", 
                 "max_size": "0x00010000", 
-                "tags": [], 
+                "tags": [
+                    "FLASH_BOOT_LOADER"
+                ], 
                 "ftab": {
                     "name": "bootloader", 
                     "address": [
@@ -26,7 +28,7 @@
             }, 
             {
                 "offset": "0x00020000", 
-                "max_size": "0x00D00000", 
+                "max_size": "0x00200000", 
                 "tags": [
                     "HCPU_FLASH_CODE"
                 ], 
@@ -37,45 +39,38 @@
                         "xip"
                     ]
                 }, 
-                "img": "main",
+                "img": "main:ER_IROM1.bin",
                 "exec": "main"
             }, 
             {
-                "offset": "0x00D20000",
-                "max_size": "0x00060000",
-                "tags": [
-                    "DFU_FLASH_CODE"
-                ],
-                "img": "dfu",
-                "exec": "dfu",
-                "ftab": {
-                    "name": "dfu",
-                    "address": [
-                        "base",
-                        "xip"
-                    ]
-                }
-            },
-            {
-                "offset": "0x00D80000",
-                "max_size": "0x00120000",
-                "tags": [
-                    "DFU_DOWNLOAD_REGION"
-                ]
-            },
-            {
-                "offset": "0x00EA0000", 
+                "offset": "0x00220000", 
                 "max_size": "0x00004000", 
                 "tags": [
                     "KVDB_DFU_REGION"
                 ]
             }, 
             {
-                "offset": "0x00EA4000", 
+                "offset": "0x00224000", 
                 "max_size": "0x00004000", 
                 "tags": [
                     "KVDB_BLE_REGION"
                 ]
+            },
+            {
+                "offset": "0x00228000",
+                "max_size": "0x800000",
+                "tags": [
+                    "EZIP_IMAGE_DATA"
+                ],
+                "img": "main:ER_IROM3.bin"
+            },
+            {
+                "offset": "0x00A28000",
+                "max_size": "0x5D8000",
+                "tags": [
+                    "FONT_DATA"
+                ],
+                "img": "main:ER_IROM2.bin"
             }
         ]
     }, 
