@@ -24,10 +24,28 @@
 #include "lv_seqimg.h"
 #include "xiaozhi_ui.h"
 
+// 定义UI消息类型
+typedef enum {
+    UI_MSG_CHAT_STATUS,
+    UI_MSG_CHAT_OUTPUT,
+    UI_MSG_UPDATE_EMOJI,
+    UI_MSG_UPDATE_BLE,
+    UI_MSG_TTS_OUTPUT,
+    UI_MSG_TTS_SWITCH_PART,
+    UI_MSG_BUTTON_PRESSED,
+    UI_MSG_BUTTON_RELEASED
+} ui_msg_type_t;
+
+// 定义UI消息结构
+typedef struct {
+    ui_msg_type_t type;
+    char *data;
+} ui_msg_t;
+static rt_mq_t ui_msg_queue = RT_NULL;
 
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
-rt_mailbox_t g_ui_task_mb;
+rt_mailbox_t g_ui_task_mb =RT_NULL;
 // 开机动画相关全局变量
 static struct rt_semaphore update_ui_sema;
 extern const lv_image_dsc_t startup_logo;  //开机动画图标
@@ -123,7 +141,23 @@ static const uint16_t brigtness_tb[] =
 
 #define BASE_WIDTH 390
 #define BASE_HEIGHT 450
+// 文本复制函数
+static char* ui_strdup(const char* str) {
+    if (str == RT_NULL) return RT_NULL;
+    size_t len = strlen(str) + 1;
+    char* copy = (char*)rt_malloc(len);
+    if (copy) {
+        memcpy(copy, str, len);
+    }
+    return copy;
+}
 
+// 文本释放函数
+static void ui_free(char* str) {
+    if (str) {
+        rt_free(str);
+    }
+}
 HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
 {
     rt_kprintf("PowerDownCustom\n");
@@ -203,72 +237,6 @@ static void startup_anim_ready_cb(struct _lv_anim_t* anim)
     rt_kprintf("Startup fadein completed, waiting 1.5s before fadeout\n");
 }
 
-// 创建开机动画 - 使用与蓝牙图标相同的方式
-static void create_startup_animation(void)
-{
-    rt_kprintf("Creating startup animation\n");
-    
-    // 检查startup_logo是否可用
-    if (&startup_logo == NULL) {
-        rt_kprintf("Warning: startup_logo not available, skipping animation\n");
-        g_startup_animation_finished = true;
-        return;
-    }
-    
-    // 使用信号量保护LVGL操作
-    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-    
-    // 创建全屏启动画面
-    g_startup_screen = lv_obj_create(lv_screen_active());
-    if (!g_startup_screen) {
-        rt_kprintf("Error: Failed to create startup screen\n");
-        g_startup_animation_finished = true;
-        rt_sem_release(&update_ui_sema);
-        return;
-    }
-    
-    lv_obj_remove_style_all(g_startup_screen);
-    lv_obj_set_size(g_startup_screen, lv_disp_get_hor_res(NULL), lv_disp_get_ver_res(NULL));
-    lv_obj_set_style_bg_color(g_startup_screen, lv_color_hex(0x000000), 0); // 黑色背景
-    lv_obj_set_style_bg_opa(g_startup_screen, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(g_startup_screen, LV_OBJ_FLAG_CLICKABLE);
-    
-    // 创建图片对象 - 与蓝牙图标创建方式完全相同
-    g_startup_img = lv_img_create(g_startup_screen);
-    if (!g_startup_img) {
-        rt_kprintf("Error: Failed to create startup image\n");
-        lv_obj_del(g_startup_screen);
-        g_startup_screen = NULL;
-        g_startup_animation_finished = true;
-        rt_sem_release(&update_ui_sema);
-        return;
-    }
-    
-    lv_img_set_src(g_startup_img, &startup_logo);  // 使用相同的显示方式
-    lv_obj_center(g_startup_img); // 居中显示
-    lv_obj_set_style_img_opa(g_startup_img, LV_OPA_0, 0); // 初始完全透明
-    
-    // 设置图片大小 - 针对200×102分辨率的logo优化
-    // 保持宽高比 200:102 ≈ 1.96:1，在屏幕上显示为合适尺寸
-    lv_obj_set_size(g_startup_img, SCALE_DPX(180), SCALE_DPX(92)); // 宽180dp，高92dp
-    lv_img_set_zoom(g_startup_img, (int)(LV_SCALE_NONE * g_scale)); // 根据缩放因子缩放
-    
-    // 确保启动画面在最顶层
-    lv_obj_move_foreground(g_startup_screen);
-    
-    // 开始淡入动画
-    lv_anim_init(&g_startup_anim);
-    lv_anim_set_var(&g_startup_anim, g_startup_img);
-    lv_anim_set_values(&g_startup_anim, 0, 255); // 淡入
-    lv_anim_set_time(&g_startup_anim, 800); // 0.8秒淡入
-    lv_anim_set_exec_cb(&g_startup_anim, startup_fade_anim_cb);
-    lv_anim_set_ready_cb(&g_startup_anim, startup_anim_ready_cb);
-    lv_anim_start(&g_startup_anim);
-    
-    rt_sem_release(&update_ui_sema);
-    
-    rt_kprintf("Startup animation started\n");
-}
 
 static void switch_cont_anim(bool hidden);
 static void contdown_anim_ready_cb(struct _lv_anim_t* anim)
@@ -643,7 +611,7 @@ rt_err_t xiaozhi_ui_obj_init()
 #endif // defualt
     lv_obj_add_flag(battery_outline, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-
+/*---------------------------------下滑菜单-----------------*/
 #define CONT_W          scr_width
 #define CONT_H          scr_height
 #define CONT_W_PER(x)   ((CONT_W)*(x)/100)
@@ -683,6 +651,9 @@ rt_err_t xiaozhi_ui_obj_init()
     create_tip_label(cont, "BRT", 4, 0);
     create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
 
+
+
+/*------------------电池---------------------*/
     g_battery_fill = lv_obj_create(battery_outline);
     lv_obj_set_style_outline_width(g_battery_fill, 0, 0);
     lv_obj_set_style_outline_pad(g_battery_fill, 0, 0);
@@ -727,7 +698,7 @@ rt_err_t xiaozhi_ui_obj_init()
     //gif  Emoji - 居中显示
     seqimg = lv_seqimg_create(img_container);
     lv_seqimg_src_array(seqimg, angry, 57);
-    lv_seqimg_set_period(seqimg, 100);          // 每帧间隔 100ms
+    lv_seqimg_set_period(seqimg, 30);          // 每帧间隔 100ms
     lv_obj_align(seqimg, LV_ALIGN_CENTER, 0, 0);
     lv_img_set_zoom(seqimg, (int)(LV_SCALE_NONE) * g_scale);
     lv_seqimg_play(seqimg);                     // 开始播放
@@ -754,8 +725,66 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_style_text_align(global_label2, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(global_label2, LV_ALIGN_TOP_MID, 0, 0);
 
+/*-------------添加开机动画--------------------*/
 
-    rt_kprintf("Screen res: %d x %d\n", scr_width, scr_height);
+
+    rt_kprintf("Creating startup animation\n");
+    
+    // 检查startup_logo是否可用
+    if (&startup_logo == NULL) {
+        rt_kprintf("Warning: startup_logo not available, skipping animation\n");
+        g_startup_animation_finished = true;
+        return RT_ERROR;
+    }
+
+    // 创建全屏启动画面
+    g_startup_screen = lv_obj_create(lv_screen_active());
+    if (!g_startup_screen) {
+        rt_kprintf("Error: Failed to create startup screen\n");
+        g_startup_animation_finished = true;
+        return RT_ERROR;
+    }
+    
+    lv_obj_remove_style_all(g_startup_screen);
+    lv_obj_set_size(g_startup_screen, lv_disp_get_hor_res(NULL), lv_disp_get_ver_res(NULL));
+    lv_obj_set_style_bg_color(g_startup_screen, lv_color_hex(0x000000), 0); // 黑色背景
+    lv_obj_set_style_bg_opa(g_startup_screen, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(g_startup_screen, LV_OBJ_FLAG_CLICKABLE);
+    
+    // 创建图片对象 - 与蓝牙图标创建方式完全相同
+    g_startup_img = lv_img_create(g_startup_screen);
+    if (!g_startup_img) {
+        rt_kprintf("Error: Failed to create startup image\n");
+        lv_obj_del(g_startup_screen);
+        g_startup_screen = NULL;
+        g_startup_animation_finished = true;
+        return RT_ERROR;
+    }
+    
+    lv_img_set_src(g_startup_img, &startup_logo);  // 使用相同的显示方式
+    lv_obj_center(g_startup_img); // 居中显示
+    lv_obj_set_style_img_opa(g_startup_img, LV_OPA_0, 0); // 初始完全透明
+    
+    // 设置图片大小 - 针对200×102分辨率的logo优化
+    // 保持宽高比 200:102 ≈ 1.96:1，在屏幕上显示为合适尺寸
+    lv_obj_set_size(g_startup_img, SCALE_DPX(180), SCALE_DPX(92)); // 宽180dp，高92dp
+    lv_img_set_zoom(g_startup_img, (int)(LV_SCALE_NONE * g_scale)); // 根据缩放因子缩放
+    
+    // 确保启动画面在最顶层
+    lv_obj_move_foreground(g_startup_screen);
+    
+    // 开始淡入动画
+    lv_anim_init(&g_startup_anim);
+    lv_anim_set_var(&g_startup_anim, g_startup_img);
+    lv_anim_set_values(&g_startup_anim, 0, 255); // 淡入
+    lv_anim_set_time(&g_startup_anim, 800); // 0.8秒淡入
+    lv_anim_set_exec_cb(&g_startup_anim, startup_fade_anim_cb);
+    lv_anim_set_ready_cb(&g_startup_anim, startup_anim_ready_cb);
+    lv_anim_start(&g_startup_anim);
+    
+    rt_kprintf("Startup animation started\n");
+
+
 
     return RT_EOK;
 }
@@ -763,262 +792,106 @@ rt_err_t xiaozhi_ui_obj_init()
 
 void xiaozhi_ui_chat_status(char *string) // top text
 {
-    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-
-    if (string)
+    if(ui_msg_queue != RT_NULL)
     {
-        lv_label_set_text(global_label1, string);
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if(msg != RT_NULL)
+        {
+            msg->type = UI_MSG_CHAT_STATUS;
+            msg->data = ui_strdup(string);
+            if(rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK)
+            {
+                LOG_E("Failed to send UI message");
+                rt_free(msg->data);
+                rt_free(msg);
+            }
+        }
     }
-
-    rt_sem_release(&update_ui_sema);
 }
 
 void xiaozhi_ui_chat_output(char *string)
 {
-    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-
-    if (string)
+    if(ui_msg_queue != RT_NULL)
     {
-        lv_label_set_text(global_label2, string);
-#ifdef BSP_USING_PM
-        lv_display_trigger_activity(NULL);
-#endif // BSP_USING_PM
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if(msg != RT_NULL)
+        {
+            msg->type = UI_MSG_CHAT_OUTPUT;
+            msg->data = ui_strdup(string);
+            if(rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK)
+            {
+                LOG_E("Failed to send UI message");
+                rt_free(msg->data);
+                rt_free(msg);
+            }
+        }
     }
-
-    rt_sem_release(&update_ui_sema);
 }
 
 static void switch_to_second_part(void *parameter)
 {
-    if (g_label_for_second_part && strlen(g_second_part) > 0)
-    {
-        rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-
-        int len = strlen(g_second_part);
-        if (len > SHOW_TEXT_LEN)
-        {
-            // 再次分割文本
-            char first_part[SHOW_TEXT_LEN + 1];
-            char remaining[512];
-
-            // 查找合适的截断点
-            int cut_pos = SHOW_TEXT_LEN;
-            while (cut_pos > 0 &&
-                   ((unsigned char)g_second_part[cut_pos] & 0xC0) == 0x80)
-            {
-                cut_pos--;
+     if (ui_msg_queue != RT_NULL) {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_TTS_SWITCH_PART;
+            msg->data = RT_NULL;  // 这个消息不需要数据
+            if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                rt_free(msg);
             }
-
-            strncpy(first_part, g_second_part, cut_pos);
-            first_part[cut_pos] = '\0';
-
-            strncpy(remaining, g_second_part + cut_pos, sizeof(remaining) - 1);
-            remaining[sizeof(remaining) - 1] = '\0';
-
-            // 显示当前部分
-            lv_label_set_text(g_label_for_second_part, first_part);
-
-            // 保存剩余部分
-            strncpy(g_second_part, remaining, sizeof(g_second_part) - 1);
-            g_second_part[sizeof(g_second_part) - 1] = '\0';
-
-            // 重置定时器以显示下一部分
-            rt_timer_control(g_split_text_timer, RT_TIMER_CTRL_SET_TIME,
-                             &(rt_tick_t){rt_tick_from_millisecond(6000)});
-            rt_timer_start(g_split_text_timer);
         }
-        else
-        {
-            // 最后一部分，直接显示
-            lv_label_set_text(g_label_for_second_part, g_second_part);
-            memset(g_second_part, 0, sizeof(g_second_part));
-            g_label_for_second_part = NULL;
-        }
-
-        rt_sem_release(&update_ui_sema);
     }
 }
 void xiaozhi_ui_tts_output(char *string)
 {
-    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-
-    if (string)
-    {
-        int len = strlen(string);
-        rt_kprintf("len == %d\n", len);
-
-        if (len > SHOW_TEXT_LEN)
-        {
-            // 查看 SHOW_TEXT_LEN 是否落在一个多字节字符中间
-            int cut_pos = SHOW_TEXT_LEN;
-
-            // 向前调整到完整的 UTF-8 字符起点
-            while (cut_pos > 0 &&
-                   ((unsigned char)string[cut_pos] & 0xC0) == 0x80)
-            {
-                cut_pos--;
+     if (ui_msg_queue != RT_NULL) {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_TTS_OUTPUT;
+            msg->data = ui_strdup(string);
+            if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                ui_free(msg->data);
+                rt_free(msg);
             }
-
-            if (cut_pos == 0) // 找不到合适的截断点，直接截断
-                cut_pos = SHOW_TEXT_LEN;
-
-            // 截取第一部分
-            char first_part[SHOW_TEXT_LEN + 1];
-            strncpy(first_part, string, cut_pos);
-            first_part[cut_pos] = '\0'; // 确保字符串结束
-
-            // 剩余部分从 cut_pos 开始
-            strncpy(g_second_part, string + cut_pos, sizeof(g_second_part) - 1);
-            g_second_part[sizeof(g_second_part) - 1] = '\0'; // 确保结尾
-            g_label_for_second_part = global_label2;
-
-            lv_label_set_text(global_label2, first_part);
-#ifdef BSP_USING_PM
-            lv_display_trigger_activity(NULL);
-#endif // BSP_USING_PM
-
-            // 创建定时器
-            if (!g_split_text_timer)
-            {
-                g_split_text_timer = rt_timer_create(
-                    "next_text", switch_to_second_part, NULL,
-                    rt_tick_from_millisecond(6000), // 9秒后显示下一部分
-                    RT_TIMER_FLAG_ONE_SHOT | RT_TIMER_FLAG_SOFT_TIMER);
-            }
-            else
-            {
-                rt_timer_stop(g_split_text_timer);
-            }
-            rt_timer_start(g_split_text_timer);
-        }
-        else
-        {
-            lv_label_set_text(global_label2, string);
-#ifdef BSP_USING_PM
-            lv_display_trigger_activity(NULL);
-#endif // BSP_USING_PM
         }
     }
-
-    rt_sem_release(&update_ui_sema);
 }
 
 void xiaozhi_ui_update_emoji(char *string) // emoji
 {
-
-    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-
-     if (string) {
-
-         if (strcmp(string, "neutral") == 0)
+    if(ui_msg_queue != RT_NULL)
+    {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if(msg != RT_NULL)
         {
-            lv_seqimg_src_array(seqimg, neutral, sizeof(neutral) / sizeof(neutral[0]));
-        }
-        else if (strcmp(string, "happy") == 0)
-        {
-            lv_seqimg_src_array(seqimg, happy, sizeof(happy) / sizeof(happy[0]));
-        }
-        else if (strcmp(string, "laughing") == 0)
-        {
-            lv_seqimg_src_array(seqimg, laughing, sizeof(neutral) / sizeof(neutral[0]));
-        }
-        else if (strcmp(string, "funny") == 0)
-        {
-            lv_seqimg_src_array(seqimg, funny, sizeof(funny) / sizeof(funny[0]));
-        }
-        else if (strcmp(string, "sad") == 0)
-        {
-            lv_seqimg_src_array(seqimg, sad, sizeof(sad) / sizeof(sad[0]));
-        }
-        else if (strcmp(string, "angry") == 0)
-        {
-            lv_seqimg_src_array(seqimg, angry, sizeof(angry) / sizeof(angry[0]));
-        }
-        else if (strcmp(string, "crying") == 0)
-        {
-            lv_seqimg_src_array(seqimg, crying, sizeof(crying) / sizeof(crying[0]));
-        }
-        else if (strcmp(string, "loving") == 0)
-        {
-            lv_seqimg_src_array(seqimg, loving, sizeof(loving) / sizeof(loving[0]));
-        }
-        else if (strcmp(string, "embarrassed") == 0)
-        {
-            lv_seqimg_src_array(seqimg, embarrassed, sizeof(embarrassed) / sizeof(embarrassed[0]));
-        }
-        else if (strcmp(string, "surprised") == 0)
-        {
-            lv_seqimg_src_array(seqimg, surprised, sizeof(surprised) / sizeof(surprised[0]));
-        }
-        else if (strcmp(string, "shocked") == 0)
-        {
-            lv_seqimg_src_array(seqimg, shocked, sizeof(shocked) / sizeof(shocked[0]));
-        }
-        else if (strcmp(string, "thinking") == 0)
-        {
-            lv_seqimg_src_array(seqimg, thinking, sizeof(thinking) / sizeof(thinking[0]));
-        }
-        else if (strcmp(string, "winking") == 0)
-        {
-            lv_seqimg_src_array(seqimg, winking, sizeof(winking) / sizeof(winking[0]));
-        }
-        else if (strcmp(string, "cool") == 0)
-        {
-            lv_seqimg_src_array(seqimg, cool, sizeof(cool) / sizeof(cool[0]));
-        }
-        else if (strcmp(string, "relaxed") == 0)
-        {
-            lv_seqimg_src_array(seqimg, relaxed, sizeof(relaxed) / sizeof(relaxed[0]));
-        }
-        else if (strcmp(string, "delicious") == 0)
-        {
-            lv_seqimg_src_array(seqimg, delicious, sizeof(delicious) / sizeof(delicious[0]));
-        }
-        else if (strcmp(string, "kissy") == 0)
-        {
-            lv_seqimg_src_array(seqimg, kissy, sizeof(kissy) / sizeof(kissy[0]));
-        }
-        else if (strcmp(string, "confident") == 0)
-        {
-            lv_seqimg_src_array(seqimg, confident, sizeof(confident) / sizeof(confident[0]));
-        }
-        else if (strcmp(string, "sleepy") == 0)
-        {
-            lv_seqimg_src_array(seqimg, sleepy, sizeof(sleepy) / sizeof(sleepy[0]));
-        }
-        else if (strcmp(string, "silly") == 0)
-        {
-            lv_seqimg_src_array(seqimg, silly, sizeof(silly) / sizeof(silly[0]));
-        }
-        else if (strcmp(string, "confused") == 0)
-        {
-            lv_seqimg_src_array(seqimg, confused, sizeof(confused) / sizeof(confused[0]));
-        }
-        else
-        {
-            lv_seqimg_src_array(seqimg, neutral, sizeof(neutral) / sizeof(neutral[0])); // common emoji is neutral
+            msg->type = UI_MSG_UPDATE_EMOJI;
+            msg->data = ui_strdup(string);
+            if(rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK)
+            {
+                LOG_E("Failed to send UI message");
+                rt_free(msg->data);
+                rt_free(msg);
+            }
         }
     }
-    rt_sem_release(&update_ui_sema);
 }
 
 void xiaozhi_ui_update_ble(char *string) // ble
 {
-    rt_sem_take(&update_ui_sema, RT_WAITING_FOREVER);
-
-    if (string)
+    if(ui_msg_queue != RT_NULL)
     {
-        if (strcmp(string, "open") == 0)
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if(msg != RT_NULL)
         {
-            lv_img_set_src(global_img_ble, &ble);
-        }
-        else if (strcmp(string, "close") == 0)
-        {
-            lv_img_set_src(global_img_ble, &ble_close);
+            msg->type = UI_MSG_UPDATE_BLE;
+            msg->data = ui_strdup(string);
+            if(rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK)
+            {
+                LOG_E("Failed to send UI message");
+                rt_free(msg->data);
+                rt_free(msg);
+            }
         }
     }
-
-    rt_sem_release(&update_ui_sema);
 }
 extern const unsigned char droid_sans_fallback_font[];
 extern const int droid_sans_fallback_font_size;
@@ -1118,6 +991,13 @@ void xiaozhi_ui_task(void *args)
     static rt_device_t touch_device;
     
     rt_sem_init(&update_ui_sema, "update_ui", 1, RT_IPC_FLAG_FIFO);
+    //初始化UI消息队列
+    ui_msg_queue = rt_mq_create("ui_msg", sizeof(ui_msg_t*), 20, RT_IPC_FLAG_FIFO);
+    if(ui_msg_queue == RT_NULL)
+    {
+        LOG_E("Failed to create UI message queue");
+        return;
+    }
     // 初始化UI消息邮箱
     if (g_ui_task_mb == RT_NULL) {
         g_ui_task_mb = rt_mb_create("ui_mb", 8, RT_IPC_FLAG_FIFO);
@@ -1166,8 +1046,6 @@ void xiaozhi_ui_task(void *args)
     {
         return;
     }
-
-    create_startup_animation();
 
     xiaozhi_ui_update_ble("close");
     xiaozhi_ui_chat_status("连接中...");
@@ -1276,7 +1154,228 @@ void xiaozhi_ui_task(void *args)
             rt_kprintf("Battery level received: %d\n", battery_level);
             xiaozhi_update_battery_level(battery_level);
         }
+        // 处理UI消息队列中的消息
+        ui_msg_t* msg;
+        while (rt_mq_recv(ui_msg_queue, &msg, sizeof(ui_msg_t*), 0) == RT_EOK)
+        {
+            switch (msg->type)
+            {
+                case UI_MSG_CHAT_STATUS:
+                    if(msg->data)
+                    {
+                        lv_label_set_text(global_label1, msg->data);
+                    }
+                    break;
+                case UI_MSG_CHAT_OUTPUT:
+                    if(msg->data)
+                    {
+                        lv_label_set_text(global_label2, msg->data);    
+                    }
+                    break;
+                case UI_MSG_UPDATE_EMOJI:
+                    if(msg->data)
+                    {
+                        if (strcmp(msg->data, "neutral") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, neutral, sizeof(neutral) / sizeof(neutral[0]));
+                        }
+                        else if (strcmp(msg->data, "happy") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, happy, sizeof(happy) / sizeof(happy[0]));
+                        }
+                        else if (strcmp(msg->data, "laughing") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, laughing, sizeof(neutral) / sizeof(neutral[0]));
+                        }
+                        else if (strcmp(msg->data, "funny") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, funny, sizeof(funny) / sizeof(funny[0]));
+                        }
+                        else if (strcmp(msg->data, "sad") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, sad, sizeof(sad) / sizeof(sad[0]));
+                        }
+                        else if (strcmp(msg->data, "angry") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, angry, sizeof(angry) / sizeof(angry[0]));
+                        }
+                        else if (strcmp(msg->data, "crying") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, crying, sizeof(crying) / sizeof(crying[0]));
+                        }
+                        else if (strcmp(msg->data, "loving") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, loving, sizeof(loving) / sizeof(loving[0]));
+                        }
+                        else if (strcmp(msg->data, "embarrassed") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, embarrassed, sizeof(embarrassed) / sizeof(embarrassed[0]));
+                        }
+                        else if (strcmp(msg->data, "surprised") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, surprised, sizeof(surprised) / sizeof(surprised[0]));
+                        }
+                        else if (strcmp(msg->data, "shocked") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, shocked, sizeof(shocked) / sizeof(shocked[0]));
+                        }
+                        else if (strcmp(msg->data, "thinking") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, thinking, sizeof(thinking) / sizeof(thinking[0]));
+                        }
+                        else if (strcmp(msg->data, "winking") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, winking, sizeof(winking) / sizeof(winking[0]));
+                        }
+                        else if (strcmp(msg->data, "cool") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, cool, sizeof(cool) / sizeof(cool[0]));
+                        }
+                        else if (strcmp(msg->data, "relaxed") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, relaxed, sizeof(relaxed) / sizeof(relaxed[0]));
+                        }
+                        else if (strcmp(msg->data, "delicious") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, delicious, sizeof(delicious) / sizeof(delicious[0]));
+                        }
+                        else if (strcmp(msg->data, "kissy") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, kissy, sizeof(kissy) / sizeof(kissy[0]));
+                        }
+                        else if (strcmp(msg->data, "confident") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, confident, sizeof(confident) / sizeof(confident[0]));
+                        }
+                        else if (strcmp(msg->data, "sleepy") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, sleepy, sizeof(sleepy) / sizeof(sleepy[0]));
+                        }
+                        else if (strcmp(msg->data, "silly") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, silly, sizeof(silly) / sizeof(silly[0]));
+                        }
+                        else if (strcmp(msg->data, "confused") == 0)
+                        {
+                            lv_seqimg_src_array(seqimg, confused, sizeof(confused) / sizeof(confused[0]));
+                        }
+                        else
+                        {
+                            lv_seqimg_src_array(seqimg, neutral, sizeof(neutral) / sizeof(neutral[0])); // common emoji is neutral
+                        }
+                    }
+                    break;
+                case UI_MSG_UPDATE_BLE:
+                    if(msg->data)
+                    {
+                        if (strcmp(msg->data, "open") == 0)
+                        {
+                            lv_img_set_src(global_img_ble, &ble);
+                        }
+                        else if (strcmp(msg->data, "close") == 0)
+                        {
+                            lv_img_set_src(global_img_ble, &ble_close);
+                        }
+                    }
+                    break;
+                case UI_MSG_TTS_OUTPUT:
+                    if(msg->data)
+                    {
+                         int len = strlen(msg->data);
+                        rt_kprintf("len == %d\n", len);
 
+                        if (len > SHOW_TEXT_LEN) {
+                            // 查看 SHOW_TEXT_LEN 是否落在一个多字节字符中间
+                            int cut_pos = SHOW_TEXT_LEN;
+
+                            // 向前调整到完整的 UTF-8 字符起点
+                            while (cut_pos > 0 &&
+                                   ((unsigned char)msg->data[cut_pos] & 0xC0) == 0x80) {
+                                cut_pos--;
+                            }
+
+                            if (cut_pos == 0) // 找不到合适的截断点，直接截断
+                                cut_pos = SHOW_TEXT_LEN;
+
+                            // 截取第一部分
+                            char first_part[SHOW_TEXT_LEN + 1];
+                            strncpy(first_part, msg->data, cut_pos);
+                            first_part[cut_pos] = '\0'; // 确保字符串结束
+
+                            // 剩余部分从 cut_pos 开始
+                            strncpy(g_second_part, msg->data + cut_pos, sizeof(g_second_part) - 1);
+                            g_second_part[sizeof(g_second_part) - 1] = '\0'; // 确保结尾
+                            g_label_for_second_part = global_label2;
+
+                            lv_label_set_text(global_label2, first_part);
+#ifdef BSP_USING_PM
+                            lv_display_trigger_activity(NULL);
+#endif // BSP_USING_PM
+
+                            // 创建定时器
+                            if (!g_split_text_timer) {
+                                g_split_text_timer = rt_timer_create(
+                                    "next_text", switch_to_second_part, NULL,
+                                    rt_tick_from_millisecond(6000), // 9秒后显示下一部分
+                                    RT_TIMER_FLAG_ONE_SHOT | RT_TIMER_FLAG_SOFT_TIMER);
+                            } else {
+                                rt_timer_stop(g_split_text_timer);
+                            }
+                            rt_timer_start(g_split_text_timer);
+                        } else {
+                            lv_label_set_text(global_label2, msg->data);
+#ifdef BSP_USING_PM
+                            lv_display_trigger_activity(NULL);
+#endif // BSP_USING_PM
+                        }
+                    }
+                    break;
+                case UI_MSG_TTS_SWITCH_PART:
+                    if (g_label_for_second_part && strlen(g_second_part) > 0) {
+                        int len = strlen(g_second_part);
+                        if (len > SHOW_TEXT_LEN) {
+                            // 再次分割文本
+                            char first_part[SHOW_TEXT_LEN + 1];
+                            char remaining[512];
+
+                            // 查找合适的截断点
+                            int cut_pos = SHOW_TEXT_LEN;
+                            while (cut_pos > 0 &&
+                                ((unsigned char)g_second_part[cut_pos] & 0xC0) == 0x80) {
+                                cut_pos--;
+                            }
+
+                            strncpy(first_part, g_second_part, cut_pos);
+                            first_part[cut_pos] = '\0';
+
+                            strncpy(remaining, g_second_part + cut_pos, sizeof(remaining) - 1);
+                            remaining[sizeof(remaining) - 1] = '\0';
+
+                            // 显示当前部分
+                            lv_label_set_text(g_label_for_second_part, first_part);
+
+                            // 保存剩余部分
+                            strncpy(g_second_part, remaining, sizeof(g_second_part) - 1);
+                            g_second_part[sizeof(g_second_part) - 1] = '\0';
+
+                            // 重置定时器以显示下一部分
+                            rt_timer_control(g_split_text_timer, RT_TIMER_CTRL_SET_TIME,
+                                            &(rt_tick_t){rt_tick_from_millisecond(6000)});
+                            rt_timer_start(g_split_text_timer);
+                        } else {
+                            // 最后一部分，直接显示
+                            lv_label_set_text(g_label_for_second_part, g_second_part);
+                            memset(g_second_part, 0, sizeof(g_second_part));
+                            g_label_for_second_part = NULL;
+                        }
+                        
+                    }
+                    break;
+            }
+            // 释放消息内存
+            ui_free(msg->data);
+            rt_free(msg);
+        }
         if (RT_EOK == rt_sem_trytake(&update_ui_sema))
         {
             ms = lv_task_handler();

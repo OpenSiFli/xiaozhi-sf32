@@ -556,7 +556,7 @@ int main(void)
 #endif
     // Create  xiaozhi UI
     rt_thread_t tid =
-        rt_thread_create("xz_ui", xiaozhi_ui_task, NULL, 4096, 30, 10);
+        rt_thread_create("xz_ui", xiaozhi_ui_task, NULL, 6144, 30, 10);
     rt_thread_startup(tid);
 
     // Connect BT PAN
