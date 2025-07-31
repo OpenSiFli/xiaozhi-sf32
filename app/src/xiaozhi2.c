@@ -432,8 +432,8 @@ static void xz_button_init(void) // Session key
 
         // 按键2（关机）
         button_cfg_t cfg2;
-        cfg2.pin = 43;
-        cfg2.active_state = 1;
+        cfg2.pin = BSP_KEY2_PIN;
+        cfg2.active_state = BSP_KEY2_ACTIVE_HIGH;
         cfg2.mode = PIN_MODE_INPUT;
         cfg2.button_handler = xz_button2_event_handler;
         int32_t id2 = button_init(&cfg2);

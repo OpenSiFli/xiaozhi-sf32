@@ -562,6 +562,9 @@ rt_err_t xiaozhi_ui_obj_init()
     header_row = lv_obj_create(main_container);
     lv_obj_remove_flag(header_row, LV_OBJ_FLAG_SCROLLABLE); // 关闭滚动条
     lv_obj_set_size(header_row, scr_width, SCALE_DPX(40));  // 固定高度为 40dp
+#if USING_TOUCH_SWITCH
+    lv_obj_add_event_cb(header_row, header_row_event_handler, LV_EVENT_ALL, NULL);
+#endif
 
     // 清除 header_row 的内边距和外边距
     lv_obj_set_style_pad_all(header_row, 0, 0);
