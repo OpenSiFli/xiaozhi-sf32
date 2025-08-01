@@ -39,7 +39,7 @@ extern void xiaozhi_ui_chat_status(char *string);
 extern void xiaozhi_ui_chat_output(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_tts_output(char *string);
-
+#define WEBSOC_RECONNECT 4
 // IoT 模块相关
 extern void iot_initialize();                              // 初始化 IoT 模块
 extern void iot_invoke(const uint8_t *data, uint16_t len); // 执行远程命令
@@ -259,7 +259,7 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
     return 0;
 }
 void xiaozhi2(int argc, char **argv);
-void reconnect_websocket()
+void reconnect_xiaozhi()
 {
 
     if (!g_pan_connected)
@@ -332,7 +332,7 @@ void reconnect_websocket()
     }
 }
 extern rt_mailbox_t g_bt_app_mb;
-#define WEBSOCKET_RECONNECT 3
+
 static void xz_button_event_handler(int32_t pin, button_action_t action) {
     static button_action_t last_action = BUTTON_RELEASED;
     if (last_action == action) return;
@@ -354,7 +354,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action) {
 //                 xz_aec_mic_open(thiz);
 //             }
 // #endif            
-            rt_mb_send(g_bt_app_mb, PAN_RECONNECT);
+            rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
             xiaozhi_ui_chat_status("唤醒中...");
         } 
         else 
