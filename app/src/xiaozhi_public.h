@@ -29,7 +29,7 @@
 #include "cJSON.h"
 
 
- #define PAN_RECONNECT 4
+
  #define XZ_DOWNLINK_QUEUE_NUM 128
  #define XZ_MIC_FRAME_LEN (320 * 6) // 60ms for 16k samplerate
  #define XZ_SPK_FRAME_LEN (480 * 6) // 60ms for 24k samplerate, speaker frame len
