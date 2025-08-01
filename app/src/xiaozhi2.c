@@ -259,7 +259,7 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
     return 0;
 }
 void xiaozhi2(int argc, char **argv);
-void reconnect_websocket()
+void reconnect_xiaozhi()
 {
 
     if (!g_pan_connected)
@@ -354,7 +354,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action) {
                 xz_aec_mic_open(thiz);
             }
 #endif            
-            rt_mb_send(g_bt_app_mb, PAN_RECONNECT);
+            rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT);
             xiaozhi_ui_chat_status("唤醒中...");
         } 
         else 
