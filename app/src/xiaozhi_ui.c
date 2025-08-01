@@ -1391,7 +1391,7 @@ void xiaozhi_ui_task(void *args)
             {
                 rt_tick_t now = rt_tick_get();
                 rt_tick_t delta = now - last_listen_tick;
-                if (delta < rt_tick_from_millisecond(3500))
+                if (delta < rt_tick_from_millisecond(8000))
                 {
                     LOG_I("Websocket disconnected, entering low power mode");
                     
@@ -1406,8 +1406,9 @@ void xiaozhi_ui_task(void *args)
                     BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
                     MCP_RGBLED_CLOSE(); 
                     show_sleep_countdown_and_sleep();
-                    gui_pm_fsm(GUI_PM_ACTION_SLEEP);
                     last_listen_tick = 0; 
+                    gui_pm_fsm(GUI_PM_ACTION_SLEEP);
+                    
                 }
             }
 
