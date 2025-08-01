@@ -384,7 +384,7 @@ void simulate_button_released()
 {
     xz_button_event_handler(BSP_KEY1_PIN, BUTTON_RELEASED);
 }
-
+#endif
 
 // 倒计时动画
 static lv_obj_t *countdown_screen = NULL;
@@ -413,7 +413,7 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
     }
 }
 
-#endif
+
 
 static void xz_button_init(void) // Session key
 {

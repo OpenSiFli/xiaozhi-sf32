@@ -20,6 +20,12 @@
 #include "lwip/apps/mqtt_priv.h"
 #include "lwip/apps/mqtt.h"
 #include "lwip/tcpip.h"
+#include "lv_timer.h"
+#include "lv_display.h"
+#include "lv_obj_pos.h"
+#include "lv_tiny_ttf.h"
+#include "lv_obj.h"
+#include "lv_label.h"
 static const char *ota_version =
     "{\r\n "
     "\"version\": 2,\r\n"
@@ -359,5 +365,50 @@ void xz_set_lcd_brightness(uint16_t level)
     if (bl_device != NULL && ret == RT_EOK)
         rt_device_close(bl_device);
 }
+extern const unsigned char xiaozhi_font[];
+extern const int xiaozhi_font_size;
 
+void show_sleep_countdown_and_sleep(void)
+{
+    static lv_obj_t *sleep_screen = NULL;
+    if (!sleep_screen) {
+        sleep_screen = lv_obj_create(NULL);
+        lv_obj_set_style_bg_color(sleep_screen, lv_color_hex(0x000000), 0);
+    }
+    lv_obj_clean(sleep_screen);
+    lv_screen_load(sleep_screen);
 
+    // 顶部“即将休眠”label
+    int tip_font_size = 36;
+    lv_font_t *tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
+    static lv_style_t style_tip_sleep;
+    lv_style_init(&style_tip_sleep);
+    lv_style_set_text_font(&style_tip_sleep, tip_font);
+    lv_style_set_text_color(&style_tip_sleep, lv_color_hex(0xFFFFFF));
+    lv_obj_t *tip_label = lv_label_create(sleep_screen);
+    lv_label_set_text(tip_label, "即将休眠");
+    lv_obj_add_style(tip_label, &style_tip_sleep, 0);
+    lv_obj_align(tip_label, LV_ALIGN_TOP_MID, 0, 20);
+
+    // 中间倒计时数字
+    int font_size = 120;
+    lv_font_t *big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, font_size);
+    static lv_style_t style_big_sleep;
+    lv_style_init(&style_big_sleep);
+    lv_style_set_text_font(&style_big_sleep, big_font);
+    lv_style_set_text_color(&style_big_sleep, lv_color_hex(0xFFFFFF));
+    lv_obj_t *label = lv_label_create(sleep_screen);
+    lv_obj_add_style(label, &style_big_sleep, 0);
+    lv_obj_center(label);
+
+    for (int i = 3; i >= 1; --i)
+    {
+        char num[2] = {0};
+        snprintf(num, sizeof(num), "%d", i);
+        lv_label_set_text(label, num);
+        lv_obj_center(label);
+        lv_timer_handler();
+        rt_thread_mdelay(1000);
+    }
+    rt_kprintf("sleep countdown ok\n");
+}

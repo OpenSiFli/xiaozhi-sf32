@@ -511,13 +511,13 @@ static void line_event_handler(struct _lv_event_t* e)
 }
 
 
-
+static lv_obj_t *main_screen = NULL; // 新增
 rt_err_t xiaozhi_ui_obj_init()
 {
 
 
    
-
+    main_screen = lv_screen_active(); // 保存主界面
     LV_IMAGE_DECLARE(ble);
     LV_IMAGE_DECLARE(ble_close);
 
@@ -551,6 +551,7 @@ rt_err_t xiaozhi_ui_obj_init()
 #if USING_TOUCH_SWITCH
     lv_obj_add_event_cb(header_row, header_row_event_handler, LV_EVENT_ALL, NULL);
 #endif
+
 
     // 清除 header_row 的内边距和外边距
     lv_obj_set_style_pad_all(header_row, 0, 0);
@@ -900,11 +901,15 @@ static void pm_event_handler(gui_pm_event_type_t event)
     case GUI_PM_EVT_RESUME:
     {
         lv_timer_enable(true);
+        if (main_screen) {
+            lv_screen_load(main_screen); // 唤醒后切回主界面
+        }
         if (!thiz->vad_enabled)
         {
             thiz->vad_enabled = true;
             xz_aec_mic_open(thiz);
             rt_kprintf("PM resume: mic reopened\n");
+            
         }
         break;
     }
@@ -986,6 +991,7 @@ void xiaozhi_ui_task(void *args)
     static rt_device_t touch_device;
     static rt_tick_t last_listen_tick = 0;
     rt_sem_init(&update_ui_sema, "update_ui", 1, RT_IPC_FLAG_FIFO);
+    rt_kprintf("xiaozhi_ui_task start\n");
     //初始化UI消息队列
     ui_msg_queue = rt_mq_create("ui_msg", sizeof(ui_msg_t*), 20, RT_IPC_FLAG_FIFO);
     if(ui_msg_queue == RT_NULL)
@@ -1384,7 +1390,8 @@ void xiaozhi_ui_task(void *args)
             if (g_xz_ws.is_connected == 0 && last_listen_tick > 0)
             {
                 rt_tick_t now = rt_tick_get();
-                if ((now - last_listen_tick) > rt_tick_from_millisecond(3000))
+                rt_tick_t delta = now - last_listen_tick;
+                if (delta < rt_tick_from_millisecond(10000))
                 {
                     LOG_I("Websocket disconnected, entering low power mode");
                     
@@ -1398,6 +1405,7 @@ void xiaozhi_ui_task(void *args)
                     (unsigned char *)&g_bt_app_env.bd_addr,
                     BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
                     MCP_RGBLED_CLOSE(); 
+                    show_sleep_countdown_and_sleep();
                     gui_pm_fsm(GUI_PM_ACTION_SLEEP);
                     last_listen_tick = 0; 
                 }
@@ -1423,7 +1431,7 @@ void xiaozhi_ui_task(void *args)
                 (unsigned char *)&g_bt_app_env.bd_addr,
                 BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
                 MCP_RGBLED_CLOSE();
-
+                show_sleep_countdown_and_sleep();    
                 gui_pm_fsm(GUI_PM_ACTION_SLEEP);
             
             }

@@ -194,7 +194,7 @@ static void battery_level_task(void *parameter)
         }
 
         rt_mb_send(g_battery_mb, battery_percentage);
-        rt_thread_mdelay(5000);
+        rt_thread_mdelay(10000);
     }
 }
 
@@ -568,7 +568,7 @@ int main(void)
         rt_kprintf("Failed to create mailbox g_button_event_mb\n");
         return 0;
     }
-
+    rt_kprintf("Xiaozhi start!!!\n");
     audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, VOL_DEFAULE_LEVEL); // 设置音量 
     xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
     iot_initialize(); // Initialize iot

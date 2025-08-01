@@ -104,5 +104,5 @@ uint8_t xz_get_config_update(void);
 void xz_set_config_update(uint8_t en);
 void xz_set_lcd_brightness(uint16_t level);
 void PowerDownCustom(void);
-
+void show_sleep_countdown_and_sleep(void);
 #endif // XIAOZHI_PUBLIC_H
