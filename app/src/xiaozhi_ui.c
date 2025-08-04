@@ -1392,6 +1392,7 @@ void xiaozhi_ui_task(void *args)
                 rt_tick_t now = rt_tick_get();
                 rt_tick_t delta = now - last_listen_tick;
                 if (delta < rt_tick_from_millisecond(12000))
+
                 {
                     LOG_I("Websocket disconnected, entering low power mode");
                     

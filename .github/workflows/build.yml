@@ -58,7 +58,10 @@ jobs:
         mkdir -p release/${{ matrix.target }}
         cp app/project/build_${{ matrix.target }}_hcpu/bootloader/bootloader.bin release/${{ matrix.target }}/
         cp app/project/build_${{ matrix.target }}_hcpu/ftab/ftab.bin release/${{ matrix.target }}/
-        cp app/project/build_${{ matrix.target }}_hcpu/main.bin release/${{ matrix.target }}/
+        cp app/project/build_${{ matrix.target }}_hcpu/main.bin/ER_IROM1.bin release/${{ matrix.target }}/
+        cp app/project/build_${{ matrix.target }}_hcpu/main.bin/ER_IROM2.bin release/${{ matrix.target }}/
+        cp app/project/build_${{ matrix.target }}_hcpu/main.bin/ER_IROM3.bin release/${{ matrix.target }}/
+        # cp sftool_param.json release/${{ matrix.target }}/
         
         # Create a zip archive for this target
         cd release

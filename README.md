@@ -12,10 +12,20 @@
 
 ## 支持硬件
 
-- 在[SF32LB52-DevKit-LCD](https://wiki.sifli.com/board/sf32lb52x/SF32LB52-DevKit-LCD.html)上测试通过
-- 在[立创黄山派](https://wiki.sifli.com/board/sf32lb52x/SF32LB52-%E9%BB%84%E5%B1%B1%E6%B4%BE.html)上测试通过
+- [SF32LB52-DevKit-LCD](https://wiki.sifli.com/board/sf32lb52x/SF32LB52-DevKit-LCD.html)
+- [立创黄山派](https://wiki.sifli.com/board/sf32lb52x/SF32LB52-%E9%BB%84%E5%B1%B1%E6%B4%BE.html)
+- [SF32LB52-Nano-52j](https://wiki.sifli.com/board/sf32lb52x/SF32LB52-DevKit-Nano.html)
+
+## 支持特性
+
+- 蓝牙PAN联网
+- 采用 OPUS 音频编解码
+- 基于流式 ASR + LLM + TTS 架构的语音交互
+- 电量显示与电源管理
+- 支持VAD以支持连续对话
+- 通过设备端 MCP 实现设备控制（音量、灯光、电机、GPIO 等）
+- 通过云端 MCP 扩展大模型能力（智能家居控制、PC桌面操作、知识搜索、邮件收发等）
 
 ## 管理地址
 
 后台管理地址为: <https://xiaozhi.me>
-
