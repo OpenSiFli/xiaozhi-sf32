@@ -40,6 +40,7 @@ public:
     void SetColor(uint32_t color) {
         struct rt_rgbled_configuration configuration;
         configuration.color_rgb = color;
+        rt_kprintf("Setting RGB LED color: 0x%06X\n", color);
         rt_device_control(rgbled_device_, PWM_CMD_SET_COLOR, &configuration);
     }
 

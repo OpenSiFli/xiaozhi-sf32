@@ -65,10 +65,12 @@ void RGBLEDTool::RegisterRGBLEDTool(McpServer* server) {
         PropertyList(),
         [](const PropertyList&) -> ReturnValue {
             is_color_cycling_ = false;
+            rt_thread_mdelay(100); 
 #ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
             // 对于52J板子，控制PA32引脚输出高电平熄灭LED
             rt_pin_write(LED_PIN, PIN_HIGH);
 #else
+            
             GetRGBLEDController().SetColor(0x000000);
 #endif
             return true;
