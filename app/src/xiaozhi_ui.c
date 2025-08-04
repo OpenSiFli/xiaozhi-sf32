@@ -63,7 +63,7 @@ static float g_scale = 1.0f;
 
 extern const unsigned char xiaozhi_font[];
 extern const int xiaozhi_font_size;
-
+extern BOOL g_pan_connected;
 
 
 extern const lv_image_dsc_t ble; // ble
@@ -1387,7 +1387,7 @@ void xiaozhi_ui_task(void *args)
             char *current_text = lv_label_get_text(global_label1);
 
             // 低功耗判断
-            if (g_xz_ws.is_connected == 0 && last_listen_tick > 0)
+            if (g_xz_ws.is_connected == 0 && last_listen_tick > 0 && g_pan_connected)
             {
                 rt_tick_t now = rt_tick_get();
                 rt_tick_t delta = now - last_listen_tick;
