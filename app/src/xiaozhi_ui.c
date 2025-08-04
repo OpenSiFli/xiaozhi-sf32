@@ -1391,7 +1391,7 @@ void xiaozhi_ui_task(void *args)
             {
                 rt_tick_t now = rt_tick_get();
                 rt_tick_t delta = now - last_listen_tick;
-                if (delta < rt_tick_from_millisecond(8000))
+                if (delta < rt_tick_from_millisecond(12000))
                 {
                     LOG_I("Websocket disconnected, entering low power mode");
                     
@@ -1417,7 +1417,7 @@ void xiaozhi_ui_task(void *args)
             {
                 lv_display_trigger_activity(NULL);
             }
-            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT)
+            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && g_pan_connected)
             {
                 LOG_I("30s no action \n");
                 if(thiz->vad_enabled)
