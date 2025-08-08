@@ -1426,6 +1426,7 @@ void xiaozhi_ui_task(void *args)
             }
             if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && g_pan_connected)
             {
+                lv_display_trigger_activity(NULL);
                 LOG_I("30s no action \n");
                 if(thiz->vad_enabled)
                 {
