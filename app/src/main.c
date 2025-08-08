@@ -17,6 +17,7 @@
 #include "xiaozhi_public.h"
 #include "bf0_pm.h"
 #include <drivers/rt_drv_encoder.h>
+#include "drv_flash.h"
 extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
@@ -557,6 +558,40 @@ static void check_poweron_reason(void)
     }
     }
 }
+static int32_t Write_MAC(int argc, char **argv)
+{
+    uint8_t len;
+    uint8_t mac[6] = {0};
+    char *endptr;
+
+    if (argc < 7)
+    {
+        rt_kprintf("write_mac FAIL\n");
+        return 1;
+    }
+    for (len = 0; len < 6; len++)
+    {
+        mac[5 - len] = (uint8_t)(strtoul(argv[1 + len], &endptr, 16) & 0xFF);
+        if (endptr == argv[1 + len])
+        {
+            rt_kprintf("incorrect MAC\n");
+            return 2;
+        }
+    }
+
+    len = rt_flash_config_write(FACTORY_CFG_ID_MAC, (uint8_t *)&mac[0], 6);
+    if (len < 6)
+    {
+        rt_kprintf("write_mac FAIL\n");
+    }
+    else
+    {
+        rt_kprintf("MAC: %02x-%02x-%02x-%02x-%02x-%02x\n", mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
+        rt_kprintf("write_mac PASS\n");
+    }
+    return 0;
+}
+MSH_CMD_EXPORT(Write_MAC, write mac);
 
 int main(void)
 {
