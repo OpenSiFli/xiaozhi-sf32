@@ -168,7 +168,7 @@ void ws_send_speak_abort(void *ws, char *session_id, int reason)
 
 void ws_send_listen_start(void *ws, char *session_id, enum ListeningMode mode)
 {
-    rt_kprintf("listen start\n");
+    rt_kprintf("listen start,mode=%d\n",mode);
     rt_snprintf(message, 256,
                 "{\"session_id\":\"%s\",\"type\":\"listen\",\"state\":"
                 "\"start\",\"mode\":\"%s\"}",
@@ -287,6 +287,11 @@ void reconnect_xiaozhi()
         xiaozhi_ui_update_emoji("embarrassed");
         return;
     }
+    // if (g_xz_ws.clnt.pcb != NULL)
+    // {
+    //     wsock_close(&g_xz_ws.clnt, WSOCK_RESULT_OK, ERR_OK);
+    // }
+    // memset(&g_xz_ws.clnt, 0, sizeof(g_xz_ws.clnt));
     // Check if the websocket is already connected
     if (g_xz_ws.clnt.pcb != NULL && g_xz_ws.clnt.pcb->state != CLOSED)
     {
@@ -521,6 +526,9 @@ void parse_helLo(const u8_t *data, u16_t len)
         xiaozhi_ui_chat_status("待命中...");
         xiaozhi_ui_chat_output("小智已连接!");
         xiaozhi_ui_update_emoji("neutral");
+#ifdef PKG_XIAOZHI_USING_AEC
+        ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id, kListeningModeAlwaysOn);
+#endif
     }
     else if (strcmp(type, "goodbye") == 0)
     {
@@ -772,7 +780,6 @@ static void parse_ota_response(const char *response,
 
     cJSON_Delete(root);
 }
-
 void xiaozhi2(int argc, char **argv)
 {
     g_activation_context.sem =

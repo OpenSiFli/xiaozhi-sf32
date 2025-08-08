@@ -90,6 +90,7 @@ typedef struct
     audio_client_t speaker;
     audio_client_t mic;
 #if PKG_XIAOZHI_USING_AEC
+    struct rt_ringbuffer    *rb_vad_cache;
     sifli_resample_t *resample;
     VadInst *handle;
     int voice_state;
@@ -105,6 +106,8 @@ typedef struct
     bool vad_enabled;
 } xz_audio_t;
 
+
+
 void xz_aec_mic_close(xz_audio_t *thiz);
 void xz_aec_mic_open(xz_audio_t *thiz);
 
@@ -118,4 +121,5 @@ void xz_set_config_update(uint8_t en);
 void xz_set_lcd_brightness(uint16_t level);
 void PowerDownCustom(void);
 void show_sleep_countdown_and_sleep(void);
+ble_common_update_type_t ble_request_public_address(bd_addr_t *addr);
 #endif // XIAOZHI_PUBLIC_H

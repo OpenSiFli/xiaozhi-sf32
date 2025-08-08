@@ -19,6 +19,7 @@
 #include "opus_multistream.h"
 #include "os_support.h"
 #include "audio_server.h"
+#include "drv_audprc.h"
 #include "mem_section.h"
 
 #ifdef PKG_XIAOZHI_USING_AEC
@@ -30,6 +31,9 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "xiaozhi_public.h"
+#include "opus.h"
+#include "debug.h"
+#include "opus_private.h"
 #undef LOG_TAG
 #define LOG_TAG "xz"
 #define DBG_TAG "xz"
@@ -37,7 +41,7 @@
 #include "log.h"
 
 #define XZ_THREAD_NAME "xiaozhi"
-#define XZ_OPUS_STACK_SIZE 220000
+#define XZ_OPUS_STACK_SIZE (32 * 1024)
 #define XZ_EVENT_MIC_RX (1 << 0)
 #define XZ_EVENT_SPK_TX (1 << 1)
 #define XZ_EVENT_DOWNLINK (1 << 2)
@@ -46,19 +50,26 @@
 #define XZ_EVENT_ALL                                                           \
     (XZ_EVENT_MIC_RX | XZ_EVENT_SPK_TX | XZ_EVENT_DOWNLINK | XZ_EVENT_EXIT)
 
+#define VOICE_STATE_IDLE                0
+#define VOICE_STATE_WAIT_SPEAKING       1
+#define VOICE_STATE_SPEAKING            2
+
+#define VOICE_START_TIMES               (XZ_MIC_FRAME_LEN /320 * 2) /* 1 mic frames */
+#define VOICE_STOP_TIMES                30
+
+#define XZ_AUDIO_VERSION            "xz_audio_verson: 1.0"
 
 
 struct udp_pcb *udp_pcb;
 xz_audio_t xz_audio;
 
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
-L2_RET_BSS_SECT_BEGIN(g_xz_opus_stack)
+L2_RET_BSS_SECT_BEGIN(g_xz_opus_stack) //6000地址
 static uint32_t g_xz_opus_stack[XZ_OPUS_STACK_SIZE / sizeof(uint32_t)];
 L2_RET_BSS_SECT_END
 #else
 static uint32_t
-    g_xz_opus_stack[XZ_OPUS_STACK_SIZE / sizeof(uint32_t)] L2_RET_BSS_SECT(
-        g_xz_opus_stack);
+    g_xz_opus_stack[XZ_OPUS_STACK_SIZE / sizeof(uint32_t)] L2_RET_BSS_SECT(g_xz_opus_stack);
 #endif
 
 static void xz_opus_thread_entry(void *p);
@@ -160,13 +171,6 @@ RT_WEAK void simulate_button_released()
 }
 #endif
 
-#define VOICE_STATE_IDLE 0
-#define VOICE_STATE_WAIT_SPEAKING 1
-#define VOICE_STATE_SPEAKING 2
-
-#define VOICE_START_TIMES 2
-#define VOICE_STOP_TIMES 50
-
 static int mic_callback(audio_server_callback_cmt_t cmd,
                         void *callback_userdata, uint32_t reserved)
 {
@@ -179,25 +183,26 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
 #ifdef PKG_XIAOZHI_USING_AEC
     if (thiz->vad_enabled) 
     {
-        int ret = WebRtcVad_Process(thiz->handle, 16000, (int16_t *)p->data,p->data_len / 2);
+        int ret = WebRtcVad_Process(thiz->handle, 16000, (int16_t *)p->data,p->data_len / 2); //检测是否是人声 返回1是人声
 
-        if (web_g_state != kDeviceStateIdle) 
-        {
-            return 0; // 非待命状态不处理VAD
-        }
         if (VOICE_STATE_IDLE == thiz->voice_state)
         {
+#if ALLOW_VAD_WHEN_SPEAKING
+            if ((ret == 1))
+#else
             if ((ret == 1) && (web_g_state != kDeviceStateSpeaking))
+#endif
             {
                 LOG_I("idle --> wait speaking");
                 thiz->voice_stop_times = 0;
                 thiz->voice_state = VOICE_STATE_WAIT_SPEAKING;
                 thiz->voice_start_times = 0;
             }
-            return 0;
+            //return 0;
         }
         else if (VOICE_STATE_WAIT_SPEAKING == thiz->voice_state)
         {
+#if !ALLOW_VAD_WHEN_SPEAKING            
             if (web_g_state == kDeviceStateSpeaking)
             {
                 // xiaozhi is speaking, do not respond to mic input
@@ -206,15 +211,17 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
                 thiz->voice_stop_times = 0;
                 thiz->voice_state = VOICE_STATE_IDLE;
             }
-            else if (ret)
+            else 
+#endif
+            if (ret)
             {
                 // voice
                 thiz->voice_stop_times = 0;
                 if (thiz->voice_start_times < VOICE_START_TIMES)
                 {
                     thiz->voice_start_times++;
-                    LOG_I("wait enough voice times=%d",
-                          thiz->voice_start_times);
+                    // LOG_I("wait enough voice times=%d",thiz->voice_start_times);
+                    rt_ringbuffer_put(thiz->rb_vad_cache, p->data, p->data_len);
                 }
                 else if (thiz->voice_start_times == VOICE_START_TIMES)
                 {
@@ -222,7 +229,14 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
                         thiz->voice_state = VOICE_STATE_SPEAKING;
                         LOG_I("call button pressed");
                         simulate_button_pressed();
-                    
+                        uint8_t buf[320];
+                        while (rt_ringbuffer_data_len(thiz->rb_vad_cache) >= 320)
+                        {
+                            rt_ringbuffer_get(thiz->rb_vad_cache, buf, 320);
+                            rt_ringbuffer_put(thiz->rb_opus_encode_input, buf, 320);
+                        }
+                        rt_ringbuffer_put(thiz->rb_opus_encode_input, p->data, p->data_len);
+                        rt_ringbuffer_reset(thiz->rb_vad_cache);
                 }
             }
             else
@@ -231,6 +245,7 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
                 thiz->voice_start_times = 0;
                 thiz->voice_stop_times = 0;
                 thiz->voice_state = VOICE_STATE_IDLE;
+                rt_ringbuffer_reset(thiz->rb_vad_cache);
             }
             return 0;
         }
@@ -257,8 +272,9 @@ static int mic_callback(audio_server_callback_cmt_t cmd,
                     thiz->voice_state = VOICE_STATE_IDLE;
                     LOG_I("call button released");
                     simulate_button_released();
+                    return 0;
                 }
-                return 0;
+                
             }
         }
         else
@@ -349,9 +365,9 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
             rt_kprintf("pressed\r\n");
             if (mqtt_g_state == kDeviceStateSpeaking)
             {
-                mqtt_speak_abort(&g_xz_context, kAbortReasonWakeWordDetected);
                 mqtt_g_state = kDeviceStateListening;
             }
+            mqtt_speak_abort(&g_xz_context, kAbortReasonWakeWordDetected);
             mqtt_listen_start(&g_xz_context, kListeningModeManualStop);
             xiaozhi_ui_chat_status("聆听中...");
             xz_mic(1);
@@ -469,7 +485,8 @@ static void xz_opus_thread_entry(void *p)
     opus_encoder_ctl(thiz->encoder,
                      OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_WIDEBAND));
     opus_encoder_ctl(thiz->encoder, OPUS_SET_BANDWIDTH(OPUS_AUTO));
-
+    
+    opus_encoder_ctl(thiz->encoder, OPUS_SET_FORCE_MODE(MODE_SILK_ONLY));
     while (!thiz->is_exit)
     {
         rt_uint32_t evt = 0;
@@ -482,7 +499,6 @@ static void xz_opus_thread_entry(void *p)
         }
         if ((evt & XZ_EVENT_MIC_RX) && thiz->is_rx_enable)
         {
-
             rt_ringbuffer_get(thiz->rb_opus_encode_input,
                               (uint8_t *)&thiz->encode_in[0], XZ_MIC_FRAME_LEN);
 
@@ -649,7 +665,13 @@ void xz_mic_close(xz_audio_t *thiz)
 
 void xz_speaker_open(xz_audio_t *thiz)
 {
-#if !PKG_XIAOZHI_USING_AEC
+#if PKG_XIAOZHI_USING_AEC
+    #if STOP_SPEAKER_WHEN_DETECTED_MIC_VOICE
+        LOG_I("speaker on");
+        xiaozhi_ui_chat_status("\u8bb2\u8bdd\u4e2d...");
+        thiz->is_tx_enable = 1;
+    #endif
+#else
     if (!thiz->speaker)
     {
         LOG_I("speaker on");
@@ -672,9 +694,30 @@ void xz_speaker_open(xz_audio_t *thiz)
 }
 void xz_speaker_close(xz_audio_t *thiz)
 {
-#if !PKG_XIAOZHI_USING_AEC
+#if PKG_XIAOZHI_USING_AEC
+    #if STOP_SPEAKER_WHEN_DETECTED_MIC_VOICE
     LOG_I("speaker off");
     xiaozhi_ui_chat_status("\u5f85\u547d\u4e2d...");
+        rt_slist_t *idle;
+        thiz->is_tx_enable = 0;
+        rt_enter_critical();
+        while (1)
+        {
+            idle = rt_slist_first(&thiz->downlink_decode_busy);
+            if (idle)
+            {
+                rt_slist_remove(&thiz->downlink_decode_busy, idle);
+                rt_slist_append(&thiz->downlink_decode_idle, idle);
+            }
+            else
+            {
+                break;
+            }
+        }
+        rt_exit_critical();
+    #endif
+#else
+
     if (thiz->speaker)
     {
         for (int i = 0; i < 1000; i++)
@@ -723,7 +766,7 @@ void xz_audio_decoder_encoder_open(uint8_t is_websocket)
 {
     // 获取音频处理模块的实例
     xz_audio_t *thiz = &xz_audio;
-
+    LOG_I("%s", XZ_AUDIO_VERSION);
     // 检查模块是否已经初始化，避免重复初始化
     if (!thiz->inited)
     {
@@ -741,9 +784,14 @@ void xz_audio_decoder_encoder_open(uint8_t is_websocket)
         pa.read_cache_size = 0;
         pa.write_cache_size = 32000;
         pa.is_need_3a = 1;
+        pa.disable_uplink_agc = 1;
         thiz->mic = audio_open(AUDIO_TYPE_LOCAL_MUSIC, AUDIO_TXRX, &pa,
                                mic_callback, NULL);
         RT_ASSERT(thiz->mic);
+#if PKG_XIAOZHI_USING_AEC
+        mic_gain_decrease(4);
+#endif
+
         thiz->speaker = thiz->mic;
         thiz->is_rx_enable = 1;   //麦克风常开
         thiz->is_tx_enable = 1;
@@ -781,11 +829,16 @@ void xz_audio_decoder_encoder_open(uint8_t is_websocket)
                             &thiz->downlink_queue[i].node);
         }
 
+#if PKG_XIAOZHI_USING_AEC
+        thiz->rb_vad_cache = rt_ringbuffer_create(320 * VOICE_START_TIMES);
+        thiz->rb_opus_encode_input  = rt_ringbuffer_create(XZ_MIC_FRAME_LEN * 2 + 320 * VOICE_START_TIMES);
+        RT_ASSERT(thiz->rb_opus_encode_input);
+#else
         // 创建用于编码输入的环形缓冲区
         thiz->rb_opus_encode_input =
             rt_ringbuffer_create(XZ_MIC_FRAME_LEN * 2); // two frame
         RT_ASSERT(thiz->rb_opus_encode_input);
-
+#endif
         // 初始化音频处理线程
         rt_err_t err;
         err = rt_thread_init(&thiz->thread, XZ_THREAD_NAME,
@@ -827,10 +880,18 @@ void xz_audio_decoder_encoder_close(void)
         }
     }
 #if PKG_XIAOZHI_USING_AEC
+    rt_ringbuffer_destroy(thiz->rb_vad_cache);
     sifli_resample_close(thiz->resample);
     audio_close(thiz->mic);
     thiz->mic = NULL;
     thiz->speaker = NULL;
+    thiz->rb_vad_cache = NULL;
+    thiz->resample = NULL;
+    if (thiz->handle)
+    {
+        WebRtcVad_Free(thiz->handle);
+        thiz->handle = NULL;
+    }
 #else
     if (thiz->mic)
     {

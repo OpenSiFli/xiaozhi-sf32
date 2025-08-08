@@ -948,7 +948,7 @@ void xiaozhi_update_battery_level(int level)
 {
     // 确保电量在 0 到 100 之间
     g_battery_level = level;
-    rt_kprintf("Battery level updated: %d\n", g_battery_level);
+    //rt_kprintf("Battery level updated: %d\n", g_battery_level);
     if (g_battery_fill)
     {
 #ifdef LCD_USING_ST7789
@@ -978,7 +978,7 @@ void xiaozhi_update_battery_level(int level)
 
     if (g_battery_label)
     {
-        rt_kprintf("Updating battery label: %d\n", g_battery_level);
+        //rt_kprintf("Updating battery label: %d\n", g_battery_level);
         lv_label_set_text_fmt(g_battery_label, "%d%%",
                               g_battery_level); // 更新电量标签
     }
@@ -1064,17 +1064,21 @@ void xiaozhi_ui_task(void *args)
         {
             if (ui_event == UI_EVENT_SHUTDOWN)
             {
-                // 创建倒计时 screen
                 static lv_obj_t *countdown_screen = NULL;
+                static lv_font_t *tip_font = NULL;
+                static lv_font_t *big_font = NULL;
+
                 if (!countdown_screen) {
                     countdown_screen = lv_obj_create(NULL);
                     lv_obj_set_style_bg_color(countdown_screen, lv_color_hex(0x000000), 0);
                 }
                 lv_obj_clean(countdown_screen);
                 lv_screen_load(countdown_screen);
-                // 创建顶部"准备关机"label
+
                 int tip_font_size = 36;
-                lv_font_t *tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
+                if (!tip_font)
+                    tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
+
                 static lv_style_t style_tip;
                 lv_style_init(&style_tip);
                 lv_style_set_text_font(&style_tip, tip_font);
@@ -1083,9 +1087,11 @@ void xiaozhi_ui_task(void *args)
                 lv_label_set_text(tip_label, "准备关机");
                 lv_obj_add_style(tip_label, &style_tip, 0);
                 lv_obj_align(tip_label, LV_ALIGN_TOP_MID, 0, 20);
-                // 创建大号字体
+
                 int font_size = 120;
-                lv_font_t *big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, font_size);
+                if (!big_font)
+                    big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, font_size);
+
                 static lv_style_t style_big;
                 lv_style_init(&style_big);
                 lv_style_set_text_font(&style_big, big_font);
@@ -1116,13 +1122,12 @@ void xiaozhi_ui_task(void *args)
             {
             case BUTTON_EVENT_PRESSED:
                 // if (g_state == kDeviceStateSpeaking)
-                {
-                    // 唤醒设备并启用 VAD               
-
-                    ws_send_speak_abort(&g_xz_ws.clnt, g_xz_ws.session_id,
-                                        kAbortReasonWakeWordDetected);
+                {                       
+#if !PKG_XIAOZHI_USING_AEC
+                    ws_send_speak_abort(&g_xz_ws.clnt, g_xz_ws.session_id,kAbortReasonWakeWordDetected);                                           
                     xz_speaker(0); // 关闭扬声器
-                    rt_kprintf("vad_enabled jjjjjk\n");
+					rt_kprintf("vad_enabled jjjjjk\n");
+#endif // !PKG_XIAOZHI_USING_AEC 
 #ifdef BSP_USING_PM
                     if(!thiz->vad_enabled)
                     {
@@ -1131,19 +1136,21 @@ void xiaozhi_ui_task(void *args)
                         xz_aec_mic_open(thiz);    
                     }
 #endif                       
-
                 }
-                ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id,
-                                     kListeningModeManualStop);
-                xiaozhi_ui_chat_status("聆听中...");
+#if !PKG_XIAOZHI_USING_AEC                
+                ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id,kListeningModeManualStop);
                 xz_mic(1);
+#endif // !PKG_XIAOZHI_USING_AEC
+                xiaozhi_ui_chat_status("聆听中...");
+               
                 last_listen_tick = rt_tick_get(); // 记录“聆听中”开始时间
                 break;
-
             case BUTTON_EVENT_RELEASED:
                 xiaozhi_ui_chat_status("待命中...");
+#if !PKG_XIAOZHI_USING_AEC  
                 ws_send_listen_stop(&g_xz_ws.clnt, g_xz_ws.session_id);
                 xz_mic(0);
+#endif // !PKG_XIAOZHI_USING_AEC                
                 break;
 
             default:
@@ -1154,7 +1161,7 @@ void xiaozhi_ui_task(void *args)
         rt_uint32_t battery_level;
         if (rt_mb_recv(g_battery_mb, &battery_level, 0) == RT_EOK)
         {
-            rt_kprintf("Battery level received: %d\n", battery_level);
+           // rt_kprintf("Battery level received: %d\n", battery_level);
             xiaozhi_update_battery_level(battery_level);
         }
         // 处理UI消息队列中的消息
@@ -1392,7 +1399,6 @@ void xiaozhi_ui_task(void *args)
                 rt_tick_t now = rt_tick_get();
                 rt_tick_t delta = now - last_listen_tick;
                 if (delta < rt_tick_from_millisecond(12000))
-
                 {
                     LOG_I("Websocket disconnected, entering low power mode");
                     
@@ -1406,10 +1412,10 @@ void xiaozhi_ui_task(void *args)
                     (unsigned char *)&g_bt_app_env.bd_addr,
                     BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
                     MCP_RGBLED_CLOSE(); 
-                    show_sleep_countdown_and_sleep();
-                    last_listen_tick = 0; 
-                    gui_pm_fsm(GUI_PM_ACTION_SLEEP);
-                    
+                    last_listen_tick = 0;
+                    //gui_pm_fsm(GUI_PM_ACTION_SLEEP);
+                    rt_kprintf("Websocket disconnected,xiu_mian\n");
+                    show_sleep_countdown_and_sleep();                    
                 }
             }
 
@@ -1427,14 +1433,13 @@ void xiaozhi_ui_task(void *args)
                     rt_kprintf("in PM,so vad_close\n");
                     xz_aec_mic_close(thiz);
                 } 
-                LOG_I("xz_aec_speaker_close \n");
-
                 bt_interface_wr_link_policy_setting(
                 (unsigned char *)&g_bt_app_env.bd_addr,
                 BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
                 MCP_RGBLED_CLOSE();
-                show_sleep_countdown_and_sleep();    
-                gui_pm_fsm(GUI_PM_ACTION_SLEEP);
+                rt_kprintf("time out,xiu_mian\n");
+                show_sleep_countdown_and_sleep();                      
+                //gui_pm_fsm(GUI_PM_ACTION_SLEEP);
             
             }
            
