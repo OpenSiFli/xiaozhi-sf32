@@ -22,3 +22,10 @@ config RGBLED_CONTROL_PIN
     int
     default 32  
 
+config PA_EN_LEVEL
+    bool "Set to true if the PA level is high when the PA_EN pin is high."
+    default y
+
+config PA_EN_PIN
+    int "The pin number for the PA_EN control."
+    default 26

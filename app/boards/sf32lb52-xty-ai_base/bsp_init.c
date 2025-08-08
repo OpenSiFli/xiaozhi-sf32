@@ -283,6 +283,35 @@ __WEAK void SystemClock_Config(void)
 
 }
 
+#ifdef PA_EN_LEVEL
+#define PA_LEVEL (1)
+#else
+#define PA_LEVEL (0)
+#endif
+
+void audio_hardware_pa_init(void)
+{
+}
+
+void audio_hardware_pa_start(uint32_t samplerate, uint32_t reserved)
+{
+    (void)samplerate;
+    (void)reserved;
+    GPIO_InitTypeDef GPIO_InitStruct;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT;
+    GPIO_InitStruct.Pin  = PA_EN_PIN;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(hwp_gpio1, &GPIO_InitStruct);
+    HAL_Delay_us(550);
+    HAL_GPIO_WritePin(hwp_gpio1, PA_EN_PIN, PA_LEVEL);
+}
+
+void audio_hardware_pa_stop(void)
+{
+    HAL_GPIO_WritePin(hwp_gpio1, PA_EN_PIN, !PA_LEVEL);
+    HAL_Delay_us(550);
+    HAL_GPIO_DeInit(hwp_gpio1, PA_EN_PIN);
+}
 
 
 /************************ (C) COPYRIGHT Sifli Technology *******END OF FILE****/
