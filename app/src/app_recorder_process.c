@@ -41,7 +41,6 @@ static uint8_t
     g_kws_queue_buffer[KWS_QUEUE_NUM][RECORD_DATA_MAX_SIZE] L2_RET_BSS_SECT(g_kws_queue_buffer);
 #endif
 
-
 #define KWS_THREAD_STACK_SIZE (3072)
 
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
@@ -54,8 +53,6 @@ static uint32_t
 #endif
 
 static struct rt_thread kws_thread;
-
-
 
 typedef struct
 {
