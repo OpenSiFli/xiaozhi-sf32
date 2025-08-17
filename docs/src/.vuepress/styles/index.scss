@@ -1,1 +1,210 @@
-// place your custom styles here
+// .vuepress/styles/index.scss
+// 遵循 VuePress Theme Hope 最佳实践的简化样式 + 全屏Hero效果
+
+// 使用主题提供的 CSS 变量系统
+:root {
+  // 定义项目主题色（建议使用主题内置的颜色变量）
+  --theme-color: #667eea;
+  --theme-color-light: #764ba2;
+}
+
+// 导航栏透明效果（在hero区域时）
+.vp-navbar {
+  transition: all 0.3s ease;
+  
+  // 当页面在顶部时，导航栏透明
+  &.transparent {
+    background: rgba(255, 255, 255, 0.8) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+}
+
+[data-theme="dark"] .vp-navbar.transparent {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+// 全屏Hero区域实现
+.vp-hero {
+  // 关键：设置为全视口高度
+  min-height: 100vh;
+  height: 100vh;
+  
+  // 垂直居中布局
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  
+  // 确保内容不被导航栏遮挡
+  padding-top: var(--navbar-height, 4rem);
+  box-sizing: border-box;
+  
+  // 容器样式
+  .vp-hero-info {
+    text-align: center;
+    max-width: 1200px;
+    width: 100%;
+    padding: 0 2rem;
+  }
+  
+  .vp-hero-image {
+    margin: 2rem auto;
+    
+    img {
+      // 基础圆形头像样式
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+      width: 200px;
+      height: 200px;
+      object-fit: cover;
+      
+      &:hover {
+        transform: scale(1.05);
+      }
+    }
+  }
+  
+  .vp-hero-title {
+    // 使用主题的渐变色
+    background: linear-gradient(45deg, var(--theme-color), var(--theme-color-light));
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 3rem;
+    font-weight: 700;
+    margin: 1.5rem 0;
+    line-height: 1.2;
+  }
+  
+  .vp-hero-description {
+    font-size: 1.25rem;
+    margin: 1.5rem auto;
+    max-width: 600px;
+    line-height: 1.6;
+    opacity: 0.9;
+  }
+  
+  .vp-hero-actions {
+    margin-top: 2rem;
+    
+    .vp-button {
+      margin: 0.5rem;
+      transition: all 0.3s ease;
+      
+      &:hover {
+        transform: translateY(-2px);
+      }
+    }
+  }
+}
+
+// 功能卡片基础悬停效果
+.vp-feature {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border-radius: 8px;
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// 暗色模式下的适配
+[data-theme="dark"] {
+  .vp-feature:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  }
+}
+
+// SF32 芯片核心区域的文字对比度优化
+.vp-highlight:first-child {
+  // 确保文字在背景图上可读
+  .vp-highlight-header,
+  .vp-highlight-description,
+  .vp-feature-title,
+  .vp-feature-details {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.95);
+  }
+}
+
+// 响应式设计 - 全屏适配
+@media (max-width: 768px) {
+  .vp-hero {
+    // 在移动设备上稍微减少高度，为内容留出更多空间
+    min-height: 100vh;
+    height: 100vh;
+    padding: var(--navbar-height, 4rem) 1rem 2rem;
+    
+    .vp-hero-image img {
+      width: 150px;
+      height: 150px;
+    }
+    
+    .vp-hero-title {
+      font-size: 2.5rem;
+    }
+    
+    .vp-hero-description {
+      font-size: 1.1rem;
+      margin: 1rem auto;
+    }
+    
+    .vp-hero-actions {
+      margin-top: 1.5rem;
+      
+      .vp-button {
+        display: block;
+        margin: 0.75rem auto;
+        max-width: 200px;
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .vp-hero {
+    padding: var(--navbar-height, 4rem) 1rem 1rem;
+    
+    .vp-hero-image img {
+      width: 120px;
+      height: 120px;
+    }
+    
+    .vp-hero-title {
+      font-size: 2rem;
+      margin: 1rem 0;
+    }
+    
+    .vp-hero-description {
+      font-size: 1rem;
+      margin: 0.75rem auto;
+    }
+  }
+}
+
+// 大屏幕优化
+@media (min-width: 1200px) {
+  .vp-hero {
+    .vp-hero-image img {
+      width: 250px;
+      height: 250px;
+    }
+    
+    .vp-hero-title {
+      font-size: 3.5rem;
+    }
+    
+    .vp-hero-description {
+      font-size: 1.4rem;
+    }
+  }
+}
+
+// 确保下一个section正常显示
+.vp-hero + .vp-highlight {
+  margin-top: 0;
+}
