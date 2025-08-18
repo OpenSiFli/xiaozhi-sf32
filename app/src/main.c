@@ -18,6 +18,7 @@
 #include "bf0_pm.h"
 #include <drivers/rt_drv_encoder.h>
 #include "drv_flash.h"
+#include "xiaozhi_weather.h"
 extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
@@ -621,6 +622,8 @@ int main(void)
     audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, VOL_DEFAULE_LEVEL); // 设置音量 
     xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
     iot_initialize(); // Initialize iot
+    xiaozhi_time_weather_init();// Initialize time and weather
+
 #ifdef BSP_USING_BOARD_SF32LB52_LCHSPI_ULP
     unsigned int *addr2 = (unsigned int *)0x50003088; // 21
     *addr2 = 0x00000200;
@@ -728,6 +731,9 @@ int main(void)
             xiaozhi_ui_update_ble("open");
             xiaozhi_ui_chat_status("正在连接小智...");
             xiaozhi_ui_update_emoji("neutral");
+            
+                // 执行NTP与天气同步
+            xiaozhi_time_weather();
 
             rt_thread_mdelay(2000);
 #ifdef XIAOZHI_USING_MQTT

@@ -58,6 +58,9 @@ __HEAP_SIZE  = 0x00000C00;
 __ROM_EX_BASE = HCPU_RO_DATA_START_ADDR;
 __ROM_EX_SIZE = HCPU_RO_DATA_SIZE;
 
+__PSRAM_CODE_BASE = PSRAM_CODE_START_ADDR;
+__PSRAM_CODE_SIZE = PSRAM_CODE_SIZE;
+
 __PSRAM_BASE = PSRAM_DATA_START_ADDR;
 __PSRAM_SIZE = PSRAM_DATA_SIZE;
 
@@ -75,6 +78,7 @@ MEMORY
     ROM (rx) : ORIGIN = __ROM_BASE, LENGTH = __ROM_SIZE
     RAM (rw) : ORIGIN = __RAM_BASE, LENGTH = __RAM_SIZE
     ROM_EX(rw):ORIGIN = __ROM_EX_BASE, LENGTH = __ROM_EX_SIZE
+    PSRAM_CODE(rx): ORIGIN = __PSRAM_CODE_BASE, LENGTH = __PSRAM_CODE_SIZE    
     PSRAM(rw): ORIGIN = __PSRAM_BASE, LENGTH = __PSRAM_SIZE
     /* ROM2 (rx): ORIGIN = __ROM2_BASE, LENGTH = __ROM2_SIZE
     ROM3 (rx): ORIGIN = __ROM3_BASE, LENGTH = __ROM3_SIZE */
@@ -197,6 +201,18 @@ SECTIONS
     __rw_retm_data_end__ = .;
 
   } > RAM AT > ROM
+
+#ifdef BSP_USING_PSRAM
+  .psram_text :
+  {
+    . = ALIGN(4);
+    *lv_*.o (.text.*)
+    *lvgl*.o (.text.*)
+	*opus_*.o (.text.*)
+	*opus*.o (.text.*)
+  } > PSRAM_CODE AT > ROM
+#endif /* BSP_USING_PSRAM */
+
 #endif /* !FLASH_TABLE_ONLY */
 
   .text :
@@ -354,6 +370,12 @@ SECTIONS
     LONG (ADDR(.rom_ex))
     LONG (SIZEOF(.rom_ex))    
     
+#ifdef BSP_USING_PSRAM
+    LONG (LOADADDR(.psram_text))
+    LONG (ADDR(.psram_text))
+    LONG (SIZEOF(.psram_text))    
+#endif /* BSP_USING_PSRAM */
+
     __copy_table_end__ = .;
   } > ROM
   
