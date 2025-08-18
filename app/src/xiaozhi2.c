@@ -32,6 +32,7 @@
 #include "lv_obj.h"
 #include "lv_label.h"
 #include "lib_et_asr.h"
+#include "xiaozhi_weather.h"
 #ifdef BSP_USING_PM
     #include "gui_app_pm.h"
 #endif // BSP_USING_PM
@@ -42,6 +43,9 @@ extern void xiaozhi_ui_chat_status(char *string);
 extern void xiaozhi_ui_chat_output(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_tts_output(char *string);
+extern void ui_swith_to_xiaozhi_screen(void);
+extern void ui_swith_to_standby_screen(void);
+
 #define WEBSOC_RECONNECT 4
 // IoT 模块相关
 extern void iot_initialize();                              // 初始化 IoT 模块
@@ -222,8 +226,8 @@ void xz_audio_send_using_websocket(uint8_t *data, int len)
         err_t err = wsock_write(&g_xz_ws.clnt, data, len, OPCODE_BINARY);
         // rt_kprintf("send audio = %d len=%d\n", err, len);
     }
-    else
-        rt_kprintf("Websocket disconnected\n");
+    // else
+    //     rt_kprintf("Websocket disconnected\n");
 }
 
 err_t my_wsapp_fn(int code, char *buf, size_t len)
@@ -256,9 +260,9 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
             //  #endif
             MCP_RGBLED_CLOSE();
 
-            xiaozhi_ui_chat_status("休眠中...");
-            xiaozhi_ui_chat_output("请按键唤醒");
-            xiaozhi_ui_update_emoji("sleepy");
+            // xiaozhi_ui_chat_status("休眠中...");
+            // xiaozhi_ui_chat_output("请按键唤醒");
+            // xiaozhi_ui_update_emoji("sleepy");
         }
         rt_kprintf("WebSocket closed\n");
         g_xz_ws.is_connected = 0;
@@ -356,18 +360,18 @@ void reconnect_xiaozhi()
     }
 }
 extern rt_mailbox_t g_bt_app_mb;
-
+extern lv_obj_t *main_container;
+extern lv_obj_t *standby_screen;
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
     rt_kprintf("in button handle\n");
     gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
     // 如果当前处于KWS模式，则退出KWS模式
-    if (g_kws_running) 
-    {  
-        rt_kprintf("KWS exit\n");
-        g_kws_force_exit = 1;
-    }
-
+        if (g_kws_running) 
+        {  
+            rt_kprintf("KWS exit\n");
+            g_kws_force_exit = 1;
+        }
     static button_action_t last_action = BUTTON_RELEASED;
     if (last_action == action)
         return;
@@ -375,31 +379,54 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
 
     if (action == BUTTON_PRESSED)
     {
+
+ 
         rt_kprintf("pressed\r\n");
+    
         // 1. 检查是否处于睡眠状态（WebSocket未连接）
-        if (!g_xz_ws.is_connected)
+        // 判断当前显示的画面
+        lv_obj_t *current_screen = lv_screen_active();
+         // 如果当前是待机画面
+        if (current_screen == standby_screen)
         {
-            // 先执行唤醒（PAN重连）
-            // #ifdef BSP_USING_PM
-            //             rt_kprintf("web_open,so vad_enabled\n");
-            //             if(!thiz->vad_enabled)
-            //             {
-            //                 thiz->vad_enabled = true;
-            //                 xz_aec_mic_open(thiz);
-            //             }
-            // #endif
-            rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
-            xiaozhi_ui_chat_status("唤醒中...");
+            // 切换到对话界面
+            ui_swith_to_xiaozhi_screen();
+
+            // 1. 检查是否处于睡眠状态（WebSocket未连接）
+            if (!g_xz_ws.is_connected)
+            {
+                rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
+                xiaozhi_ui_chat_status("唤醒中...");
+            }
+            else
+            {
+                // 2. 已唤醒，直接进入对话模式
+                rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
+                xiaozhi_ui_chat_status("聆听中...");
+            }
+
         }
-        else
+        else//当前是对话界面
         {
-            // 2. 已唤醒，直接进入对话模式
-            rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
-            xiaozhi_ui_chat_status("聆听中...");
+            // 1. 检查是否处于睡眠状态（WebSocket未连接）
+            if (!g_xz_ws.is_connected)
+            {
+                rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
+                xiaozhi_ui_chat_status("唤醒中...");
+            }
+            else
+            {
+                // 2. 已唤醒，直接进入对话模式
+                rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
+                xiaozhi_ui_chat_status("聆听中...");
+            }
         }
     }
     else if (action == BUTTON_RELEASED)
     {
+#ifdef BSP_USING_PM
+        gui_pm_fsm(GUI_PM_ACTION_WAKEUP);
+#endif
         rt_kprintf("released\r\n");
         // 仅在已唤醒时发送停止监听
         if (g_xz_ws.is_connected)
@@ -683,6 +710,7 @@ void xiaozhi_ws_connect(void)
                 {
                     err = wsock_write(&g_xz_ws.clnt, hello_message,
                                       strlen(hello_message), OPCODE_TEXT);
+
                     rt_kprintf("Web socket write %d\r\n", err);
                     break;
                 }

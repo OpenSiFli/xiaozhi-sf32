@@ -418,9 +418,11 @@ static int sleep_countdown = 3;
 static lv_timer_t *sleep_timer = NULL;
 static volatile int g_sleep_countdown_active = 0; // 休眠倒计时标志
 
-
+extern rt_timer_t update_time_ui_timer;
+extern rt_timer_t update_weather_ui_timer;
 static void sleep_countdown_cb(lv_timer_t *timer)
 {
+    
     if (sleep_label && sleep_countdown > 0)
     {
         char num[2] = {0};
@@ -436,7 +438,16 @@ static void sleep_countdown_cb(lv_timer_t *timer)
             lv_obj_delete(sleep_label);
             sleep_label = NULL;
         }
+                if(update_time_ui_timer)
+        {
+            rt_timer_stop(update_time_ui_timer);//睡眠停止ui更新
+        }
         
+        if(update_weather_ui_timer)
+        {
+            rt_timer_stop(update_weather_ui_timer);
+        }
+
         lv_timer_delete(sleep_timer);
         sleep_timer = NULL;
         g_sleep_countdown_active = 0; // 倒计时结束，清除标志
@@ -503,10 +514,4 @@ void show_sleep_countdown_and_sleep(void)
 
     // 立即显示第一个数字
     sleep_countdown_cb(sleep_timer);
-    
-    // 在倒计时结束后清理tip_label
-    if (sleep_countdown < 0 && tip_label) {
-        lv_obj_delete(tip_label);
-        tip_label = NULL;
-    }
 }
