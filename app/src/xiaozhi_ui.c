@@ -724,6 +724,7 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_align(bluetooth_icon, LV_ALIGN_CENTER);
     lv_obj_add_flag(bluetooth_icon, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
     lv_obj_clear_flag(bluetooth_icon, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_img_set_zoom(minute_units_img, (int)(LV_SCALE_NONE * g_scale));
 
     network_icon = lv_img_create(standby_screen);
         LV_IMAGE_DECLARE(network_icon_img);

@@ -215,7 +215,7 @@ void HAL_PreInit(void)
     //HAL_sw_breakpoint();
 
     mpi1_div = 2;   // for OPI Psram driver alway set 1, for QSPI PSRAM depend on this setting, for flash depend on flash request, 2 or 3
-    mpi2_div = 5;
+    mpi2_div = 4;
 
     /* Init the low level hardware */
     HAL_MspInit();
