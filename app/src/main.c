@@ -23,6 +23,7 @@ extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
 extern void xiaozhi_ui_chat_output(char *string);
+extern void ui_swith_to_standby_screen();
 
 extern void xiaozhi_ui_task(void *args);
 extern void xiaozhi(int argc, char **argv);
@@ -65,6 +66,7 @@ void HAL_MspInit(void)
 #define BT_APP_ABNORMAL_DISCONNECT 8   // 异常断开
 #define BT_APP_RECONNECT_TIMEOUT 9    // 重连超时
 #define BT_APP_RECONNECT 10 // 重连
+#define UPDATE_REAL_WEATHER_AND_TIME 11
 #define PAN_TIMER_MS 3000
 
 bt_app_t g_bt_app_env;
@@ -78,6 +80,7 @@ static rt_timer_t s_sleep_timer = NULL;
 static int reconnect_attempts = 0;
 #define MAX_RECONNECT_ATTEMPTS 30  // 30次尝试，每次1秒，共30秒
 static uint8_t g_sleep_enter_flag = 0;    // 进入睡眠标志位
+uint8_t Initiate_disconnection_flag = 0;//蓝牙主动断开标志
 
 
 
@@ -386,7 +389,7 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
                   info->res);
             g_bt_app_env.bt_connected = FALSE;
             xiaozhi_ui_chat_output("蓝牙断开连接");
-
+            ui_swith_to_standby_screen();//失败切换至待机界面
             //  memset(&g_bt_app_env.bd_addr, 0xFF,
             //  sizeof(g_bt_app_env.bd_addr));
                  if (info->res == BT_NOTIFY_COMMON_SCO_DISCONNECTED) 
@@ -482,6 +485,7 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             xiaozhi_ui_update_ble("close");
             LOG_I("pan disconnect with remote device\n");
             g_pan_connected = FALSE; // 更新PAN连接状态
+            ui_swith_to_standby_screen();//失败切换至待机界面
             if (first_pan_connected ==
                 FALSE) // Check if the pan has ever been connected
             {
@@ -755,7 +759,8 @@ int main(void)
             xiaozhi_ui_update_ble("open");
             xiaozhi_ui_chat_status("正在连接小智...");
             xiaozhi_ui_update_emoji("neutral");
-            
+            // 清除主动断开标志位
+            Initiate_disconnection_flag = 0;
                 // 执行NTP与天气同步
             xiaozhi_time_weather();
 
@@ -821,6 +826,7 @@ int main(void)
         else if(value == BT_APP_PHONE_DISCONNECTED)
         {
             rt_kprintf("Phone actively disconnected, enter sleep mode after 30 seconds\n");
+            Initiate_disconnection_flag = 1;
             start_sleep_timer();
             //睡眠
         }
@@ -868,6 +874,10 @@ int main(void)
                     }
             }
         }
+        else if(value == UPDATE_REAL_WEATHER_AND_TIME)
+        {
+            xiaozhi_time_weather();
+        }        
         else
         {
             rt_kprintf("WEBSOCKET_DISCONNECT\r\n");

@@ -45,8 +45,9 @@ extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_tts_output(char *string);
 extern void ui_swith_to_xiaozhi_screen(void);
 extern void ui_swith_to_standby_screen(void);
-
+extern void xiaozhi_ui_update_standby_emoji(char *string);
 #define WEBSOC_RECONNECT 4
+#define UPDATE_REAL_WEATHER_AND_TIME 11
 // IoT 模块相关
 extern void iot_initialize();                              // 初始化 IoT 模块
 extern void iot_invoke(const uint8_t *data, uint16_t len); // 执行远程命令
@@ -397,22 +398,47 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
          // 如果当前是待机画面
         if (current_screen == standby_screen)
         {
-            // 切换到对话界面
-            ui_swith_to_xiaozhi_screen();
 
-            // 1. 检查是否处于睡眠状态（WebSocket未连接）
-            if (!g_xz_ws.is_connected)
-            {
-                rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
-                xiaozhi_ui_chat_status("唤醒中...");
-            }
-            else
-            {
-                // 2. 已唤醒，直接进入对话模式
-                rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
-                xiaozhi_ui_chat_status("聆听中...");
-            }
 
+            // 通过检查天气信息中的last_update字段判断是否已完成首次同步
+            extern weather_info_t g_current_weather;
+            extern date_time_t g_current_time;
+             if (g_current_weather.last_update == 0 || g_current_time.year == 0) 
+             {
+                rt_kprintf("Waiting for initial time and weather sync...\r\n");
+
+                 // 1. 检查是否处于睡眠状态（WebSocket未连接）
+                if (!g_xz_ws.is_connected)
+                {
+                    rt_mb_send(g_bt_app_mb, UPDATE_REAL_WEATHER_AND_TIME); // 发送重连消息
+                    xiaozhi_ui_chat_status("唤醒中...");
+                }
+                else
+                {
+                    // 2. 已唤醒，直接进入对话模式
+                    rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
+                    xiaozhi_ui_chat_status("聆听中...");
+                }
+
+             }
+             else
+             {
+                // 切换到对话界面
+                ui_swith_to_xiaozhi_screen();
+
+                                 // 1. 检查是否处于睡眠状态（WebSocket未连接）
+                if (!g_xz_ws.is_connected)
+                {
+                    rt_mb_send(g_bt_app_mb, UPDATE_REAL_WEATHER_AND_TIME); // 发送重连消息
+                    xiaozhi_ui_chat_status("唤醒中...");
+                }
+                else
+                {
+                    // 2. 已唤醒，直接进入对话模式
+                    rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
+                    xiaozhi_ui_chat_status("聆听中...");
+                }
+             } 
         }
         else//当前是对话界面
         {
@@ -445,14 +471,24 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
     }
 }
 #if PKG_XIAOZHI_USING_AEC
+extern uint8_t Initiate_disconnection_flag;
 void simulate_button_pressed()
 {
     rt_kprintf("simulate_button_pressed pressed\r\n");
+    if(Initiate_disconnection_flag)//蓝牙主动断开不允许mic触发
+    {
+        rt_kprintf("Initiate_disconnection_flag\r\n");
+        return;
+    }
     xz_button_event_handler(BSP_KEY1_PIN, BUTTON_PRESSED);
 }
 void simulate_button_released()
 {
     rt_kprintf("simulate_button_released released\r\n");
+    if(Initiate_disconnection_flag)
+    {
+        return;
+    }
     xz_button_event_handler(BSP_KEY1_PIN, BUTTON_RELEASED);
 }
 #endif
@@ -567,6 +603,7 @@ void parse_helLo(const u8_t *data, u16_t len)
         xiaozhi_ui_chat_status("待命中...");
         xiaozhi_ui_chat_output("小智已连接!");
         xiaozhi_ui_update_emoji("neutral");
+        xiaozhi_ui_update_standby_emoji("funny");
 #ifdef PKG_XIAOZHI_USING_AEC
         ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id, kListeningModeAlwaysOn);
 #endif
