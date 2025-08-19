@@ -945,51 +945,120 @@ int xiaozhi_ntp_sync(void)
 
 void xiaozhi_time_weather(void)//获取最新时间和天气
 {
-  int retry_count = 0;
-        const int max_retries = 3;
-        rt_err_t ntp_result = RT_ERROR;
-        
-        while (retry_count < max_retries) {
-            ntp_result = xiaozhi_ntp_sync();
-            if (ntp_result == RT_EOK) {
-                update_xiaozhi_ui_time(NULL);
-                LOG_I("Time synchronization successful, next sync in 30min");
+     // 第一次同步必须成功，否则一直重试
+    static BOOL first_sync_done = FALSE;
+
+    int retry_count = 0;
+    const int max_retries = 3;
+    rt_err_t ntp_result = RT_ERROR;
+    
+    while (1) {
+        if (!g_pan_connected) 
+        {
+            LOG_W("PAN disconnected during xiaozhi_time_weather");
+            // 如果是第一次同步且连接断开，继续等待
+            if (!first_sync_done) 
+            {
+                LOG_W("Waiting for PAN reconnection for initial sync...");
+                rt_thread_mdelay(5000); // 等待5秒后重试
+                continue;
+            } 
+            else 
+            {
                 break;
-            } else {
-                retry_count++;
+            }
+        }
+        ntp_result = xiaozhi_ntp_sync();
+        if (ntp_result == RT_EOK) 
+        {
+            update_xiaozhi_ui_time(NULL);
+            LOG_I("Time synchronization successful, next sync in 30min");
+            break;
+        } 
+        else 
+        {
+            retry_count++;
+            if (!first_sync_done) 
+            {
+                LOG_W("Initial time synchronization failed, retrying... attempt %d", retry_count);
+                rt_thread_mdelay(3000); // 等待3秒后重试
+            } 
+            else 
+            {
                 LOG_W("Time synchronization failed, attempt %d of %d", retry_count, max_retries);
                 if (retry_count < max_retries) {
                     rt_thread_mdelay(3000); // 等待3秒后重试
+                } 
+                else 
+                {
+                    break;
                 }
             }
         }
-        
-        if (ntp_result != RT_EOK) {
-            LOG_W("Time synchronization failed after %d attempts, will retry in 5 minutes", max_retries);
-        }
+    }
+    
+    if (ntp_result != RT_EOK && first_sync_done) {
+        LOG_W("Time synchronization failed after %d attempts, will retry in 5 minutes", max_retries);
+    }
 
-        // 获取天气信息带重试机制
-        retry_count = 0;
-        rt_err_t weather_result = RT_ERROR;
-        
-        while (retry_count < max_retries) {
-            weather_result = xiaozhi_weather_get(&g_current_weather);
-            if (weather_result == RT_EOK) {
-                    update_xiaozhi_ui_weather(NULL);//获取成功则更新一次
-                LOG_W("xiaozhi_weather_get successful");
+    // 获取天气信息带重试机制
+    retry_count = 0;
+    rt_err_t weather_result = RT_ERROR;
+    
+    while (1) {
+        if (!g_pan_connected) 
+        {
+            LOG_W("PAN disconnected during time synchronization");
+            // 如果是第一次同步且连接断开，继续等待
+            if (!first_sync_done) 
+            {
+                LOG_W("Waiting for PAN reconnection for initial weather sync...");
+                rt_thread_mdelay(5000); // 等待5秒后重试
+                continue;
+            } 
+            else 
+            {
                 break;
-            } else {
-                retry_count++;
+            }
+        }
+        weather_result = xiaozhi_weather_get(&g_current_weather);
+        if (weather_result == RT_EOK) 
+        {
+            update_xiaozhi_ui_weather(NULL);//获取成功则更新一次
+            LOG_W("xiaozhi_weather_get successful");
+            break;
+        } 
+        else 
+        {
+            retry_count++;
+            if (!first_sync_done) 
+            {
+                LOG_W("Initial weather synchronization failed, retrying... attempt %d", retry_count);
+                rt_thread_mdelay(3000); // 等待3秒后重试
+            } 
+            else 
+            {
                 LOG_W("Failed to get weather information, attempt %d of %d", retry_count, max_retries);
-                if (retry_count < max_retries) {
+                if (retry_count < max_retries) 
+                {
                     rt_thread_mdelay(3000); // 等待3秒后重试
                 }
+                else 
+                {
+                    break;
+                }
             }
         }
-        
-        if (weather_result != RT_EOK) {
-            LOG_W("Failed to get weather information after %d attempts, will retry in 5 minutes", max_retries);
-        }
+    }
+    
+    if (weather_result != RT_EOK && first_sync_done) {
+        LOG_W("Failed to get weather information after %d attempts, will retry in 5 minutes", max_retries);
+    }
+    
+    // 标记首次同步完成
+    if (ntp_result == RT_EOK && weather_result == RT_EOK) {
+        first_sync_done = TRUE;
+    }
 
 }
       

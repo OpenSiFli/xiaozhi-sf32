@@ -37,8 +37,10 @@ typedef enum {
     UI_MSG_BUTTON_RELEASED,
     UI_MSG_TIME_UPDATE,
     UI_MSG_WEATHER_UPDATE,
+    UI_MSG_STANDBY_EMOJI,
     UI_MSG_SWITCH_TO_STANDBY,
-    UI_MSG_SWITCH_TO_MAIN
+    UI_MSG_SWITCH_TO_MAIN,
+    UI_MSG_UPDATE_WEATHER_AND_TIME  
 
 } ui_msg_type_t;
 
@@ -49,7 +51,7 @@ typedef struct {
 } ui_msg_t;
 rt_mq_t ui_msg_queue = RT_NULL;
 
-
+#define UPDATE_REAL_WEATHER_AND_TIME 11
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
 rt_mailbox_t g_ui_task_mb =RT_NULL;
@@ -102,6 +104,7 @@ extern const lv_image_dsc_t network_icon_img_close;
 extern const lv_image_dsc_t sunny;// 天气图标
 extern const lv_image_dsc_t strip;//天气栏
 extern const lv_image_dsc_t funny2; // 表情图标
+extern const lv_image_dsc_t sleepy2; // 表情图标
 extern const lv_image_dsc_t cool_gif;
 extern const lv_image_dsc_t calendar;//日历
 extern const lv_image_dsc_t second;
@@ -140,7 +143,8 @@ lv_obj_t *ui_Label_second =NULL;//秒
 lv_obj_t *ui_Image_second = NULL;//秒的图片
 lv_obj_t * ui_Arc2 = NULL;//电池容器
 
-
+static lv_timer_t* standby_update_timer = NULL;
+static rt_timer_t bg_update_timer = NULL;
 rt_timer_t update_time_ui_timer = RT_NULL;
 rt_timer_t update_weather_ui_timer = RT_NULL;
 static rt_timer_t g_split_text_timer = RT_NULL;
@@ -271,7 +275,16 @@ void ui_sleep_callback(lv_timer_t *timer)
     ui_sleep_timer = NULL;
 }
 
+void ui_update_real_weather_and_time(void);
 
+static void standby_update_callback(lv_timer_t *timer)
+{
+    ui_update_real_weather_and_time();
+    
+    // 删除定时器（一次性使用）
+    lv_timer_delete(timer);
+    standby_update_timer = NULL;
+}
 
 
 // 淡出完成回调
@@ -638,8 +651,9 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_style_bg_color(standby_screen, lv_color_hex(0x000000), 0);//黑色
 
     img_emoji = lv_img_create(standby_screen);
+    LV_IMAGE_DECLARE(sleepy2);
     LV_IMAGE_DECLARE(funny2);
-    lv_img_set_src(img_emoji, &funny2);
+    lv_img_set_src(img_emoji, &sleepy2);//初始化提示小智还未连接
     lv_obj_set_width(img_emoji, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(img_emoji, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(img_emoji, (int)(104 * g_scale));
@@ -1103,6 +1117,43 @@ rt_err_t xiaozhi_ui_obj_init()
     return RT_EOK;
 }
 
+
+
+void xiaozhi_ui_update_standby_emoji(char *string) // emoji
+{
+    if(ui_msg_queue != RT_NULL)
+    {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if(msg != RT_NULL)
+        {
+            msg->type = UI_MSG_STANDBY_EMOJI;
+            msg->data = ui_strdup(string);
+            if(rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK)
+            {
+                LOG_E("Failed to send standby emoji UI message");
+                rt_free(msg->data);
+                rt_free(msg);
+            }
+        }
+    }
+}
+void ui_update_real_weather_and_time(void)
+{
+            // 异步发送消息更新天气和时间
+        if (ui_msg_queue != RT_NULL) {
+            ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+            if (msg != RT_NULL) {
+                msg->type = UI_MSG_UPDATE_WEATHER_AND_TIME;
+                msg->data = RT_NULL;
+                if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                    LOG_E("Failed to send weather/time update message");
+                    rt_free(msg);
+                }
+            }
+        }
+    
+}
+
 void ui_swith_to_standby_screen(void)
 {
                   if (ui_msg_queue != RT_NULL) {
@@ -1165,9 +1216,6 @@ void update_xiaozhi_ui_time(void *parameter)
 }
 void update_xiaozhi_ui_weather(void *parameter)
 {
-    // if (xiaozhi_weather_get(&g_current_weather) == RT_EOK)
-    // {
-        // LOG_W("xiaozhi_weather_get successful");
         
         // 使用消息队列发送更新UI的消息到UI线程
         extern rt_mq_t ui_msg_queue;
@@ -1186,11 +1234,6 @@ void update_xiaozhi_ui_weather(void *parameter)
             // 如果没有消息队列，回退到直接调用（保持向后兼容）
             weather_ui_update_callback();
         }
-    // }
-    // else
-    // {
-    //     LOG_W("Failed to get weather information, will retry in 5 minutes");
-    // }
 
 }
 
@@ -1434,13 +1477,17 @@ void xiaozhi_update_battery_level(int level)
     }
 
 }
+extern rt_mailbox_t g_bt_app_mb;
 extern void kws_demo_stop();
+rt_tick_t last_listen_tick = 0;
+// 添加一个变量来记录STT消息的时间
+rt_tick_t last_stt_tick = 0;
+
 void xiaozhi_ui_task(void *args)
 {
     rt_err_t ret = RT_EOK;
     rt_uint32_t ms;
     static rt_device_t touch_device;
-    static rt_tick_t last_listen_tick = 0;
     rt_sem_init(&update_ui_sema, "update_ui", 1, RT_IPC_FLAG_FIFO);
     rt_kprintf("xiaozhi_ui_task start\n");
     //初始化UI消息队列
@@ -1524,7 +1571,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
 
 
 
-        //每秒更新时间的ui
+        //更新天气
     if (!update_weather_ui_timer) 
     {update_weather_ui_timer = rt_timer_create("update_ui_time", update_xiaozhi_ui_weather, NULL,
                                     rt_tick_from_millisecond(1800000), //30分钟
@@ -1607,7 +1654,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
         if (rt_mb_recv(g_button_event_mb, &btn_event, 0) == RT_EOK)
         {
             rt_kprintf("button event: %d\n", btn_event);
-            last_listen_tick = rt_tick_get(); 
+            // last_listen_tick = rt_tick_get(); 
             switch (btn_event)
             {
             case BUTTON_EVENT_PRESSED:
@@ -1651,18 +1698,42 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
         {
             switch (msg->type)
             {
+                case UI_MSG_UPDATE_WEATHER_AND_TIME:
+                    rt_mb_send(g_bt_app_mb, UPDATE_REAL_WEATHER_AND_TIME);
+                    break;
+                case UI_MSG_STANDBY_EMOJI:
+                    if(msg->data)
+                    {
+                        if (strcmp(msg->data, "sleepy") == 0)
+                        {
+                            if (img_emoji) 
+                            {
+                                lv_img_set_src(img_emoji, &sleepy2); // 使用睡眠表情表示小智未连接
+                            }
+                        }
+                        else if (strcmp(msg->data, "funny") == 0)
+                        {
+                            if (img_emoji) 
+                            {
+                                lv_img_set_src(img_emoji, &funny2); // 使用睡眠表情表示小智未连接
+                            }
+                        }
+                    }
+                    break;
                 case UI_MSG_SWITCH_TO_STANDBY:
                     if (standby_screen) {
                         lv_screen_load(standby_screen);
-                        // 进入待机界面时更新一次天气和时间
-                        xiaozhi_time_weather();
-                        //超时30s进入休眠
-                        // 异步启动/重置睡眠定时器
-                        if (!ui_sleep_timer)
-                        {
-                            ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
                         }
-                    }
+
+                            
+                        if (standby_update_timer != NULL) {
+                            lv_timer_delete(standby_update_timer);
+                        }
+                        
+                        // 创建定时器，稍后执行更新
+                        standby_update_timer = lv_timer_create(standby_update_callback, 100, NULL);
+
+                    
                     break;
                     
                 case UI_MSG_SWITCH_TO_MAIN:
