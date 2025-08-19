@@ -208,8 +208,6 @@ SECTIONS
     . = ALIGN(4);
     *lv_*.o (.text.*)
     *lvgl*.o (.text.*)
-	*opus_*.o (.text.*)
-	*opus*.o (.text.*)
   } > PSRAM_CODE AT > ROM
 #endif /* BSP_USING_PSRAM */
 
