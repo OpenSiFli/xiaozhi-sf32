@@ -19,7 +19,7 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "./mcp/mcp_api.h"
-#define IDLE_TIME_LIMIT  (13000)
+#define IDLE_TIME_LIMIT  (30000)
 #define SHOW_TEXT_LEN 100
 #include "lv_seqimg.h"
 #include "xiaozhi_ui.h"
@@ -299,6 +299,7 @@ static void startup_fadeout_ready_cb(struct _lv_anim_t* anim)
 
         // 开机动画完成后显示待机画面
     if (standby_screen) {
+        rt_kprintf("开机->待机");
         lv_screen_load(standby_screen);
          // 异步启动睡眠30s定时器
       if (!ui_sleep_timer && g_pan_connected)
@@ -1377,7 +1378,8 @@ static void pm_event_handler(gui_pm_event_type_t event)
             lv_timer_delete(ui_sleep_timer);
             ui_sleep_timer = NULL;
         }
-        lv_screen_load(lv_obj_get_screen(main_container));//恢复屏幕
+        rt_kprintf("恢复屏幕-> 对话\n");
+        ui_swith_to_xiaozhi_screen();
         if (!thiz->vad_enabled)
         {
             thiz->vad_enabled = true;
@@ -1976,7 +1978,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             lv_obj_t *current_screen = lv_screen_active();
             if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen!=standby_screen)
             {
-                
+                rt_kprintf("listen_tick\n");
                 last_listen_tick= 1;
                 lv_display_trigger_activity(NULL);
             }
@@ -2018,6 +2020,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                     rt_kprintf("time out,xiu_mian\n");
                     if (standby_screen) 
                     {
+                        LOG_I("休眠->待机\n");
                         ui_swith_to_standby_screen();
 
                     }

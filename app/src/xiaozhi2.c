@@ -374,6 +374,7 @@ extern lv_obj_t *standby_screen;
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
     rt_kprintf("in button handle\n");
+    lv_display_trigger_activity(NULL);
     gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
     // 如果当前处于KWS模式，则退出KWS模式
         if (g_kws_running) 
@@ -424,6 +425,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
              else
              {
                 // 切换到对话界面
+                rt_kprintf("按键->对话");
                 ui_swith_to_xiaozhi_screen();
 
                                  // 1. 检查是否处于睡眠状态（WebSocket未连接）
@@ -605,6 +607,8 @@ void parse_helLo(const u8_t *data, u16_t len)
         xiaozhi_ui_chat_output("小智已连接!");
         xiaozhi_ui_update_emoji("neutral");
         xiaozhi_ui_update_standby_emoji("funny");
+        rt_kprintf("hello->对话\n");
+        ui_swith_to_xiaozhi_screen();//切换到小智对话界面
 #ifdef PKG_XIAOZHI_USING_AEC
         ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id, kListeningModeAlwaysOn);
 #endif

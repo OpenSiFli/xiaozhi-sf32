@@ -24,11 +24,12 @@ extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
 extern void xiaozhi_ui_chat_output(char *string);
 extern void ui_swith_to_standby_screen();
-
+extern void ui_swith_to_xiaozhi_screen();
 extern void xiaozhi_ui_task(void *args);
 extern void xiaozhi(int argc, char **argv);
 extern void xiaozhi2(int argc, char **argv);
 extern void reconnect_xiaozhi();
+extern rt_tick_t last_listen_tick;
 extern xiaozhi_ws_t g_xz_ws;
 extern rt_mailbox_t g_button_event_mb;
 rt_mailbox_t g_battery_mb;
@@ -389,7 +390,8 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
                   info->res);
             g_bt_app_env.bt_connected = FALSE;
             xiaozhi_ui_chat_output("蓝牙断开连接");
-            ui_swith_to_standby_screen();//失败切换至待机界面
+            LOG_I("蓝牙->待机\n");
+            ui_swith_to_standby_screen();//蓝牙断开切换至待机界面
             //  memset(&g_bt_app_env.bd_addr, 0xFF,
             //  sizeof(g_bt_app_env.bd_addr));
                  if (info->res == BT_NOTIFY_COMMON_SCO_DISCONNECTED) 
@@ -483,9 +485,11 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             xiaozhi_ui_chat_status("PAN断开...");
             xiaozhi_ui_chat_output("PAN断开,尝试唤醒键重新连接");
             xiaozhi_ui_update_ble("close");
+            last_listen_tick = 0;
             LOG_I("pan disconnect with remote device\n");
             g_pan_connected = FALSE; // 更新PAN连接状态
-            ui_swith_to_standby_screen();//失败切换至待机界面
+            LOG_I("PAN->待机\n");
+            ui_swith_to_standby_screen();//PAN断开切换至待机界面
             if (first_pan_connected ==
                 FALSE) // Check if the pan has ever been connected
             {
@@ -761,10 +765,11 @@ int main(void)
             xiaozhi_ui_update_emoji("neutral");
             // 清除主动断开标志位
             Initiate_disconnection_flag = 0;
-                // 执行NTP与天气同步
+            rt_thread_mdelay(2000);
+            // 执行NTP与天气同步
             xiaozhi_time_weather();
 
-            rt_thread_mdelay(2000);
+
 #ifdef XIAOZHI_USING_MQTT
             xiaozhi(0, NULL);
             rt_kprintf("Select MQTT Version\n");
@@ -809,6 +814,8 @@ int main(void)
                         LOG_I("Xiaozhi websocket already connected\n");
                         xiaozhi_ui_chat_status("小智已连接");
                         xiaozhi_ui_chat_output("小智已经连接");
+                        LOG_I("直接唤醒->对话\n");
+                        ui_swith_to_xiaozhi_screen();//切换到小智对话界面
                     }
                     else // 未连接websocket
                     {
