@@ -40,7 +40,8 @@ typedef enum {
     UI_MSG_STANDBY_EMOJI,
     UI_MSG_SWITCH_TO_STANDBY,
     UI_MSG_SWITCH_TO_MAIN,
-    UI_MSG_UPDATE_WEATHER_AND_TIME  
+    UI_MSG_UPDATE_WEATHER_AND_TIME,
+    UI_MSG_STANDBY_CHAT_OUTPUT 
 
 } ui_msg_type_t;
 
@@ -142,6 +143,7 @@ lv_obj_t *ui_Label_day = NULL;//日期
 lv_obj_t *ui_Label_second =NULL;//秒
 lv_obj_t *ui_Image_second = NULL;//秒的图片
 lv_obj_t * ui_Arc2 = NULL;//电池容器
+lv_obj_t * ui_Label3 = NULL;
 
 static lv_timer_t* standby_update_timer = NULL;
 static rt_timer_t bg_update_timer = NULL;
@@ -867,6 +869,16 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_clear_flag(ui_Image_second, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_img_set_zoom(ui_Image_second,(int)(300 * g_scale));
 
+
+    ui_Label3 = lv_label_create(standby_screen);
+    lv_obj_set_width(ui_Label3, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_Label3, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_Label3, (int)(2 * g_scale));
+    lv_obj_set_y(ui_Label3, (int)(189 * g_scale));
+    lv_obj_set_align(ui_Label3, LV_ALIGN_CENTER);
+    lv_obj_add_style(ui_Label3, &style2, 0);
+    lv_label_set_text(ui_Label3, "等待连接");
+
     LV_IMAGE_DECLARE(ble);
     LV_IMAGE_DECLARE(ble_close);
 
@@ -1258,6 +1270,26 @@ void xiaozhi_ui_chat_status(char *string) // top text
             if(rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK)
             {
                 LOG_E("Failed to send UI message");
+                rt_free(msg->data);
+                rt_free(msg);
+            }
+        }
+    }
+}
+
+
+void xiaozhi_ui_standby_chat_output(char *string)
+{
+    if(ui_msg_queue != RT_NULL)
+    {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if(msg != RT_NULL)
+        {
+            msg->type = UI_MSG_STANDBY_CHAT_OUTPUT;
+            msg->data = ui_strdup(string);
+            if(rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK)
+            {
+                LOG_E("Failed to send standby_chat UI message");
                 rt_free(msg->data);
                 rt_free(msg);
             }
@@ -1657,7 +1689,14 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
         {
             switch (msg->type)
             {
+                case UI_MSG_STANDBY_CHAT_OUTPUT:
+                    if(msg->data)
+                    {
+                        lv_label_set_text(ui_Label3, msg->data);    
+                    }
+                    break;
                 case UI_MSG_UPDATE_WEATHER_AND_TIME:
+                    LOG_I("update weather and time\n");
                     rt_mb_send(g_bt_app_mb, UPDATE_REAL_WEATHER_AND_TIME);
                     break;
                 case UI_MSG_STANDBY_EMOJI:
@@ -1684,7 +1723,13 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         lv_screen_load(standby_screen);
                         }
 
-                            
+                        if(ui_sleep_timer != NULL)
+                        {
+                            lv_timer_delete(ui_sleep_timer);
+                            ui_sleep_timer = NULL;
+                            ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
+                        } 
+
                         if (standby_update_timer != NULL) {
                             lv_timer_delete(standby_update_timer);
                         }
@@ -1934,7 +1979,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
 
             char *current_text = lv_label_get_text(global_label1);
             lv_obj_t *current_screen = lv_screen_active();
-            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen != standby_screen)
+            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen == main_container)
             {
 
                 rt_kprintf("listen_tick\n");

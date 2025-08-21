@@ -71,7 +71,7 @@ extern const lv_image_dsc_t w99;  // 未知天气
 #define WEATHER_LOCATION "ip"      // 默认城市，可以是城市名或经纬度
 #define WEATHER_LANGUAGE "zh-Hans" // 中文简体
 #define WEATHER_HEADER_BUFSZ 1024
-#define WEATHER_RESP_BUFSZ 2048
+#define WEATHER_RESP_BUFSZ 1024
 #define WEATHER_URL_LEN_MAX 512
 
 

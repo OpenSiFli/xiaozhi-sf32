@@ -43,6 +43,7 @@ extern void xiaozhi_ui_chat_status(char *string);
 extern void xiaozhi_ui_chat_output(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_tts_output(char *string);
+extern void xiaozhi_ui_standby_chat_output(char *string);
 extern void ui_swith_to_xiaozhi_screen(void);
 extern void ui_swith_to_standby_screen(void);
 extern void xiaozhi_ui_update_standby_emoji(char *string);
@@ -270,8 +271,10 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
 
             xiaozhi_ui_chat_status("休眠中...");
             xiaozhi_ui_chat_output("请按键或语音唤醒");
+            xiaozhi_ui_standby_chat_output("小智已断开请按键唤醒");//待机界面
             xiaozhi_ui_update_emoji("sleepy");
             xiaozhi_ui_update_standby_emoji("sleepy");
+			ui_swith_to_standby_screen();
         }
         rt_kprintf("WebSocket closed\n");
         g_xz_ws.is_connected = 0;
@@ -291,83 +294,7 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
     return 0;
 }
 void xiaozhi2(int argc, char **argv);
-void reconnect_xiaozhi()
-{
 
-    if (!g_pan_connected)
-    {
-        xiaozhi_ui_chat_status("请开启网络共享");
-        xiaozhi_ui_chat_output("请在手机上开启网络共享后重新发起连接");
-        xiaozhi_ui_update_emoji("embarrassed");
-        return;
-    }
-    // if (g_xz_ws.clnt.pcb != NULL)
-    // {
-    //     wsock_close(&g_xz_ws.clnt, WSOCK_RESULT_OK, ERR_OK);
-    // }
-    // memset(&g_xz_ws.clnt, 0, sizeof(g_xz_ws.clnt));
-    // Check if the websocket is already connected
-    if (g_xz_ws.clnt.pcb != NULL && g_xz_ws.clnt.pcb->state != CLOSED)
-    {
-        rt_kprintf("WebSocket is not in CLOSED state, cannot reconnect\n");
-        return;
-    }
-    xiaozhi_ui_chat_status("唤醒中...");
-    xiaozhi_ui_chat_output("正在唤醒小智...");
-    xiaozhi_ui_update_emoji("neutral");
-
-    err_t result;
-    uint32_t retry = 10;
-    while (retry-- > 0)
-    {
-
-        if (g_xz_ws.sem == NULL)
-            g_xz_ws.sem = rt_sem_create("xz_ws", 0, RT_IPC_FLAG_FIFO);
-        char *Client_Id = get_client_id();
-        wsock_init(&g_xz_ws.clnt, 1, 1,
-                   my_wsapp_fn); // 初始化websocket,注册回调函数
-        result = wsock_connect(
-            &g_xz_ws.clnt, MAX_WSOCK_HDR_LEN, XIAOZHI_HOST, XIAOZHI_WSPATH,
-            LWIP_IANA_PORT_HTTPS, XIAOZHI_TOKEN, NULL,
-            "Protocol-Version: 1\r\nDevice-Id: %s\r\nClient-Id: %s\r\n",
-            get_mac_address(), Client_Id);
-        rt_kprintf("Web socket connection %d\r\n", result);
-        if (result == 0)
-        {
-            rt_kprintf("result_g_xz_ws.sem = 0%d\n", g_xz_ws.sem->value);
-
-            if (RT_EOK == rt_sem_take(g_xz_ws.sem, 50000))
-            {
-                rt_kprintf("g_xz_ws.is_connected = %d\n", g_xz_ws.is_connected);
-                if (g_xz_ws.is_connected)
-                {
-                    result = wsock_write(&g_xz_ws.clnt, hello_message,
-                                         strlen(hello_message), OPCODE_TEXT);
-                    rt_kprintf("Web socket write %d\r\n", result);
-                    break;
-                }
-                else
-                {
-                    xiaozhi_ui_chat_status("唤醒中...");
-                    xiaozhi_ui_chat_output("唤醒小智失败,请重试！");
-                    xiaozhi_ui_update_emoji("neutral");
-                    rt_kprintf(
-                        "result = wsock_write_Web socket disconnected\r\n");
-                }
-            }
-            else
-            {
-                xiaozhi_ui_chat_output("连接超时,请重试！");
-                rt_kprintf("Web socket connected timeout\r\n");
-            }
-        }
-        else
-        {
-            rt_kprintf("Waiting reconnect ready(%d)... \r\n", retry);
-            rt_thread_mdelay(1000);
-        }
-    }
-}
 extern rt_mailbox_t g_bt_app_mb;
 extern lv_obj_t *main_container;
 extern lv_obj_t *standby_screen;
@@ -392,70 +319,21 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
 
  
         rt_kprintf("pressed\r\n");
-    
+        rt_kprintf("按键->对话");
+        ui_swith_to_xiaozhi_screen();
+
+
         // 1. 检查是否处于睡眠状态（WebSocket未连接）
-        // 判断当前显示的画面
-        lv_obj_t *current_screen = lv_screen_active();
-         // 如果当前是待机画面
-        if (current_screen == standby_screen)
+        if (!g_xz_ws.is_connected)
         {
-
-
-            // 通过检查天气信息中的last_update字段判断是否已完成首次同步
-            extern weather_info_t g_current_weather;
-            extern date_time_t g_current_time;
-             if (g_current_weather.last_update == 0 || g_current_time.year == 0) 
-             {
-                rt_kprintf("Waiting for initial time and weather sync...\r\n");
-
-                 // 1. 检查是否处于睡眠状态（WebSocket未连接）
-                if (!g_xz_ws.is_connected)
-                {
-                    rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
-                    xiaozhi_ui_chat_status("唤醒中...");
-                }
-                else
-                {
-                    // 2. 已唤醒，直接进入对话模式
-                    rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
-                    xiaozhi_ui_chat_status("聆听中...");
-                }
-
-             }
-             else
-             {
-                // 切换到对话界面
-                rt_kprintf("按键->对话");
-                ui_swith_to_xiaozhi_screen();
-
-                                 // 1. 检查是否处于睡眠状态（WebSocket未连接）
-                if (!g_xz_ws.is_connected)
-                {
-                    rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
-                    xiaozhi_ui_chat_status("唤醒中...");
-                }
-                else
-                {
-                    // 2. 已唤醒，直接进入对话模式
-                    rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
-                    xiaozhi_ui_chat_status("聆听中...");
-                }
-             } 
+            rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
+            xiaozhi_ui_chat_status("连接小智...");
         }
-        else//当前是对话界面
+        else
         {
-            // 1. 检查是否处于睡眠状态（WebSocket未连接）
-            if (!g_xz_ws.is_connected)
-            {
-                rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
-                xiaozhi_ui_chat_status("唤醒中...");
-            }
-            else
-            {
-                // 2. 已唤醒，直接进入对话模式
-                rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
-                xiaozhi_ui_chat_status("聆听中...");
-            }
+            // 2. 已唤醒，直接进入对话模式
+            rt_mb_send(g_button_event_mb, BUTTON_EVENT_PRESSED);
+            xiaozhi_ui_chat_status("聆听中...");
         }
     }
     else if (action == BUTTON_RELEASED)
@@ -529,7 +407,7 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
     }
 }
 
-static void xz_button_init(void) // Session key
+void xz_button_init(void) // Session key
 {
     static int initialized = 0;
     if (initialized == 0)
@@ -559,12 +437,6 @@ static void xz_button_init(void) // Session key
 void xz_ws_audio_init()
 {
     rt_kprintf("xz_audio_init\n");
-    rt_kprintf("exit sniff mode\n");
-    bt_interface_exit_sniff_mode(
-        (unsigned char *)&g_bt_app_env.bd_addr); // exit sniff mode
-    bt_interface_wr_link_policy_setting(
-        (unsigned char *)&g_bt_app_env.bd_addr,
-        BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // close role switch
     audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, 8); // 设置音量
     xz_audio_decoder_encoder_open(1); // 打开音频解码器和编码器
 
@@ -598,7 +470,13 @@ void parse_helLo(const u8_t *data, u16_t len)
         g_xz_ws.frame_duration = atoi(duration);
         strncpy(g_xz_ws.session_id, session_id, 9);
         web_g_state = kDeviceStateIdle;
-        xz_ws_audio_init(); // 初始化音频
+        
+        rt_kprintf("exit sniff mode\n");
+        bt_interface_exit_sniff_mode(
+            (unsigned char *)&g_bt_app_env.bd_addr); // exit sniff mode
+        bt_interface_wr_link_policy_setting(
+            (unsigned char *)&g_bt_app_env.bd_addr,
+            BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // close role switch
 #ifndef CONFIG_IOT_PROTOCOL_MCP
         send_iot_descriptors(); // 发送iot描述
         send_iot_states();      // 发送iot状态
@@ -865,6 +743,9 @@ static void parse_ota_response(const char *response,
 
     cJSON_Delete(root);
 }
+extern void pan_reconnect();
+
+static bool  g_ota_verified = false;
 void xiaozhi2(int argc, char **argv)
 {
     g_activation_context.sem =
@@ -872,8 +753,34 @@ void xiaozhi2(int argc, char **argv)
     char *my_ota_version;
     uint32_t retry = 10;
 
-    xz_button_init();
+        // 检查并重连蓝牙和PAN连接
+    if (!g_bt_app_env.bt_connected)   //未连接蓝牙               
+    {
+        xiaozhi_ui_chat_status("蓝牙连接中...");
+        xiaozhi_ui_chat_output("正在重连蓝牙...");
+        rt_kprintf("Bluetooth not connected, attempting to reconnect Bluetooth\n");
 
+        bt_interface_conn_ext((char *)&g_bt_app_env.bd_addr, BT_PROFILE_HID);
+        // 等待蓝牙连接
+        uint32_t bt_retry = 50; // 最多等待5秒 (50 * 100ms)
+        while (bt_retry-- > 0 && !g_bt_app_env.bt_connected) {
+            rt_thread_mdelay(100);
+        }
+    }
+
+    if (g_bt_app_env.bt_connected && !g_pan_connected) {  // 蓝牙已连接但PAN未连接
+        xiaozhi_ui_chat_status("网络连接中...");
+        xiaozhi_ui_chat_output("正在重连网络...");
+        rt_kprintf("Bluetooth connected but PAN not connected, attempting to reconnect PAN\n");
+        pan_reconnect();
+        // 等待PAN连接
+        uint32_t pan_retry = 50; // 最多等待5秒 (50 * 100ms)
+        while (pan_retry-- > 0 && !g_pan_connected) {
+            rt_thread_mdelay(100);
+        }
+    }
+
+    rt_thread_mdelay(2000);
     if (!g_pan_connected)
     {
         xiaozhi_ui_chat_status("请开启网络共享");
@@ -881,49 +788,60 @@ void xiaozhi2(int argc, char **argv)
         xiaozhi_ui_update_emoji("embarrassed");
         return;
     }
-
-    while (retry-- > 0)
-    {
-        xiaozhi_ui_chat_output("正在网络准备...");
-        my_ota_version = get_xiaozhi();
-        if (my_ota_version)
+    if (!g_ota_verified) {
+        while (retry-- > 0)
         {
-            rt_kprintf("my_ota_version = %s\n", my_ota_version);
-            parse_ota_response(my_ota_version, &g_activation_context,
-                               &g_websocket_context);
-            if (g_activation_context.is_activated)
+            xiaozhi_ui_chat_output("正在网络准备...");
+            my_ota_version = get_xiaozhi();
+            if (my_ota_version)
             {
-                she_bei_ma = 0;
-                char str_temp[256];
-                snprintf(str_temp, sizeof(str_temp),
-                         "设备未添加，请前往 xiaozhi.me "
-                         "输入绑定码: \n %s \n ",
-                         g_activation_context.code);
-                rt_kprintf("she bei ma:%s\n",g_activation_context.code);
-                xiaozhi_ui_chat_output(str_temp);
-                rt_sem_take(g_activation_context.sem, RT_WAITING_FOREVER);
-                g_activation_context.is_activated = false;
-                she_bei_ma = 1;
-                lv_display_trigger_activity(NULL);
-                
+                rt_kprintf("my_ota_version = %s\n", my_ota_version);
+                parse_ota_response(my_ota_version, &g_activation_context,
+                                &g_websocket_context);
+                if (g_activation_context.is_activated)
+                {
+                    she_bei_ma = 0;
+                    char str_temp[256];
+                    snprintf(str_temp, sizeof(str_temp),
+                            "设备未添加，请前往 xiaozhi.me "
+                            "输入绑定码: \n %s \n ",
+                            g_activation_context.code);
+                    xiaozhi_ui_chat_output(str_temp);
+                    xiaozhi_ui_standby_chat_output(str_temp);//待机界面也显示一份
+                    rt_sem_take(g_activation_context.sem, RT_WAITING_FOREVER);
+                    g_activation_context.is_activated = false;
+                    she_bei_ma = 1;
+                    lv_display_trigger_activity(NULL);
+                    
+                }
+
+                // OTA验证成功，设置标志
+                g_ota_verified = true;
+                rt_free(my_ota_version);
+                break;
             }
-            xiaozhi_ws_connect();
-            rt_free(my_ota_version);
-            break;
+            else
+            {
+                rt_kprintf("Waiting internet ready(%d)... \r\n", retry);
+                xiaozhi_ui_chat_status("等待网络...");
+                xiaozhi_ui_chat_output("等待网络重新准备...");
+                xiaozhi_ui_standby_chat_output("等待网络重新准备...");
+                rt_thread_mdelay(1000);
+            }
         }
-        else
+        if (!my_ota_version)
         {
-            rt_kprintf("Waiting internet ready(%d)... \r\n", retry);
-            xiaozhi_ui_chat_status("等待网络...");
-            xiaozhi_ui_chat_output("等待网络重新准备...");
-            rt_thread_mdelay(1000);
+            xiaozhi_ui_chat_output("请检查网络连接后重试");
+            xiaozhi_ui_standby_chat_output("OTA获取失败,请检查网络连接后重试");
+            return;
         }
     }
-    if (!my_ota_version)
+    else
     {
-        xiaozhi_ui_chat_output("请检查网络连接后重试");
-        return;
+        rt_kprintf("OTA verification skipped, already verified\n");
+
     }
+                xiaozhi_ws_connect();
 }
 MSH_CMD_EXPORT(xiaozhi2, Get Xiaozhi)
 
