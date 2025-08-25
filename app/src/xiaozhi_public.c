@@ -11,7 +11,6 @@
 #include "stdio.h"
 #include "string.h"
 #include <lwip/dns.h>
-#include <rtthread.h>
 #include <lwip/sys.h>
 #include "xiaozhi2.h"
 #include "lwip/api.h"
@@ -85,8 +84,15 @@ extern uint8_t aec_enabled;
 HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
 {
     rt_kprintf("PowerDownCustom\n");
+#ifdef BSP_USING_BOARD_SF32LB52_LCD_N16R8
+    BSP_LCD_PowerDown();
+    HAL_PMU_SelectWakeupPin(0, HAL_HPAON_QueryWakeupPin(hwp_gpio1, BSP_KEY1_PIN)); //select PA34 to wake_pin0
+    HAL_PMU_EnablePinWakeup(0, AON_PIN_MODE_HIGH);  //enable wake_pin0
+    hwp_pmuc->WKUP_CNT = 0x50005;    //31-16bit:config PIN1 wake CNT , 15-0bit:PIN0 wake CNT
+#else
     HAL_PMU_SelectWakeupPin(0, 19); // PA43
     HAL_PMU_EnablePinWakeup(0, 0);
+#endif
     HAL_PIN_Set(PAD_PA24, GPIO_A24, PIN_PULLDOWN, 1);
     for (uint32_t i = PAD_PA28; i <= PAD_PA44; i++)
     {
@@ -95,8 +101,12 @@ HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
     hwp_pmuc->PERI_LDO &=  ~(PMUC_PERI_LDO_EN_LDO18 | PMUC_PERI_LDO_EN_VDD33_LDO2 | PMUC_PERI_LDO_EN_VDD33_LDO3);
     hwp_pmuc->WKUP_CNT = 0x000F000F;
 
+    
+
     rt_hw_interrupt_disable();
     rt_kprintf("PowerDownCustom2\n");
+    HAL_PMU_ConfigPeriLdo(PMUC_PERI_LDO_EN_VDD33_LDO2_Pos, false, false);
+    HAL_PMU_ConfigPeriLdo(PMU_PERI_LDO_1V8, false, false);
     HAL_PMU_EnterHibernate();
     rt_kprintf("PowerDownCustom3\n");
 }
