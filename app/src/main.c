@@ -568,8 +568,12 @@ static void check_poweron_reason(void)
         else if (PMUC_WSR_PIN_ALL & pm_get_wakeup_src())
         {
             rt_thread_mdelay(2500); // 延时2.5秒
-            int val = rt_pin_read(43);
-            rt_kprintf("Power key(PA43) level after 2.5s: %d\n", val);
+#ifdef BSP_USING_BOARD_SF32LB52_LCD_N16R8
+            int val = rt_pin_read(BSP_KEY1_PIN);
+#else
+            int val = rt_pin_read(BSP_KEY2_PIN);
+#endif
+            rt_kprintf("Power key level after 2.5s: %d\n", val);
             if (val != KEY2_ACTIVE_LEVEL)
             {
                 // 按键已松开，认为是误触发，直接关机

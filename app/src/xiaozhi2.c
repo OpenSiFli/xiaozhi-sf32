@@ -306,6 +306,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
     rt_kprintf("in button handle\n");
     lv_display_trigger_activity(NULL);
     gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
+     rt_kprintf("in button handle2\n");
     // 如果当前处于KWS模式，则退出KWS模式
         if (g_kws_running) 
         {  
