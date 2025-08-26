@@ -20,6 +20,7 @@
 #include "drv_flash.h"
 #include "xiaozhi_weather.h"
 #include "lv_timer.h"
+#include "lv_display.h"
 extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
@@ -37,8 +38,11 @@ extern rt_tick_t last_listen_tick;
 extern xiaozhi_ws_t g_xz_ws;
 extern rt_mailbox_t g_button_event_mb;
 extern void ui_sleep_callback(lv_timer_t *timer);
+extern lv_obj_t *standby_screen;
 rt_mailbox_t g_battery_mb;
 extern lv_timer_t *ui_sleep_timer;
+extern lv_obj_t *shutdown_screen;
+extern lv_obj_t *sleep_screen;
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -397,6 +401,11 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             g_bt_app_env.bt_connected = FALSE;
             xiaozhi_ui_chat_output("蓝牙断开连接");
             xiaozhi_ui_standby_chat_output("蓝牙断开连接");//待机画面
+            lv_obj_t *now_screen = lv_screen_active();
+            if (now_screen != standby_screen && now_screen != sleep_screen && now_screen != shutdown_screen)
+                {
+                    ui_swith_to_standby_screen();
+                }
             //  memset(&g_bt_app_env.bd_addr, 0xFF,
             //  sizeof(g_bt_app_env.bd_addr));
                  if (info->res == BT_NOTIFY_COMMON_SCO_DISCONNECTED) 
@@ -770,7 +779,7 @@ int main(void)
         else if (value == BT_APP_CONNECT_PAN_SUCCESS)
         {
             rt_kputs("BT_APP_CONNECT_PAN_SUCCESS\r\n");
-            xiaozhi_ui_chat_output("初始化 请稍等...");
+            //xiaozhi_ui_chat_output("初始化 请稍等...");
             xiaozhi_ui_standby_chat_output("初始化 请稍等...");
             xiaozhi_ui_update_ble("open");
             xiaozhi_ui_chat_status("初始化...");
@@ -780,7 +789,7 @@ int main(void)
             rt_thread_mdelay(2000);
             // 执行NTP与天气同步
             xiaozhi_time_weather();
-            xiaozhi_ui_chat_output("连接小智中...");
+            //xiaozhi_ui_chat_output("连接小智中...");
             xiaozhi_ui_standby_chat_output("请按键连接小智...");
 
 #ifdef XIAOZHI_USING_MQTT

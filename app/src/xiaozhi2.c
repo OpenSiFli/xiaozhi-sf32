@@ -301,6 +301,7 @@ void xiaozhi2(int argc, char **argv);
 extern rt_mailbox_t g_bt_app_mb;
 extern lv_obj_t *main_container;
 extern lv_obj_t *standby_screen;
+
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
     rt_kprintf("in button handle\n");
@@ -320,13 +321,14 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
 
     if (action == BUTTON_PRESSED)
     {
-
- 
+        lv_obj_t *now_screen = lv_screen_active();
         rt_kprintf("pressed\r\n");
         rt_kprintf("按键->对话");
-        ui_swith_to_xiaozhi_screen();
-
-
+        if (now_screen == standby_screen)
+        {
+            ui_swith_to_xiaozhi_screen();
+        }
+    
         // 1. 检查是否处于睡眠状态（WebSocket未连接）
         if (!g_xz_ws.is_connected)
         {
@@ -385,6 +387,7 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
 {
     if (action == BUTTON_PRESSED)
     {
+        rt_sem_release(g_activation_context.sem);
         rt_kprintf("xz_button2_event_handler - pressed\n");
     }
     else if (action == BUTTON_LONG_PRESSED)
@@ -392,15 +395,14 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
         // 按下超过3秒，触发关机
         rt_kprintf("xz_button2_event_handler - long pressed\n");
         //检查设备是否已绑定设备码
-        if (g_activation_context.is_activated)
-        {
-            rt_sem_release(g_activation_context.sem);
-        }
-        else
-        {
+        // if (g_activation_context.is_activated)
+        // {
+        //     rt_sem_release(g_activation_context.sem);
+        // }
+
             // 长按3秒，直接发送关机消息到ui_task
-            rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);
-        }
+        rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);
+        
     }
     else if (action == BUTTON_RELEASED)
     {
@@ -607,6 +609,23 @@ void xiaozhi_ws_connect(void)
         xiaozhi_ui_update_emoji("embarrassed");
         return;
     }
+
+    if (g_activation_context.is_activated)
+    {
+        she_bei_ma = 0;
+        char str_temp[256];
+        snprintf(str_temp, sizeof(str_temp),
+                "设备未添加，请前往 xiaozhi.me "
+                "输入绑定码: \n %s \n ",
+                g_activation_context.code);
+        xiaozhi_ui_chat_output(str_temp);
+        xiaozhi_ui_standby_chat_output(str_temp);//待机界面也显示一份
+        rt_sem_take(g_activation_context.sem, RT_WAITING_FOREVER);
+        g_activation_context.is_activated = false;
+        she_bei_ma = 1;
+        lv_display_trigger_activity(NULL);
+        
+    }
     // 检查 WebSocket 的 TCP 控制块状态是否为 CLOSED
     if (g_xz_ws.clnt.pcb != NULL && g_xz_ws.clnt.pcb->state != CLOSED)
     {
@@ -657,7 +676,9 @@ void xiaozhi_ws_connect(void)
         else
         {
             rt_kprintf("Waiting ws_connect ready%d... \r\n", retry);
+            xiaozhi_ui_chat_output("小智连接失败!");
             rt_thread_mdelay(1000);
+            ui_swith_to_standby_screen();
         }
     }
 }
