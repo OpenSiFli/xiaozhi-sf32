@@ -991,13 +991,13 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_add_event_cb(cont, cont_event_handler, LV_EVENT_ALL, NULL);
 #endif
 
-    create_tip_label(cont, "No_Inter", 1, 0); //vad
+    create_tip_label(cont, "不打断", 1, 0); //vad
     create_switch(cont, vad_switch_event_handler, 1, 2, 1);
-    create_tip_label(cont, "Wake_up", 2, 0); //aec
+    create_tip_label(cont, "唤醒", 2, 0); //aec
     create_switch(cont, aec_switch_event_handler, 2, 2, 0);
-    create_tip_label(cont, "VOL", 3, 0);
+    create_tip_label(cont, "音量", 3, 0);
     create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
-    create_tip_label(cont, "BRT", 4, 0);
+    create_tip_label(cont, "亮度", 4, 0);
     create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
 
 

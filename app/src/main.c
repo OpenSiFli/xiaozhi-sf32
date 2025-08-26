@@ -331,7 +331,7 @@ void pan_reconnect()
 
     LOG_I("Attempting to reconnect PAN, attempt %d",
           first_reconnect_attempts + 1);
-    xiaozhi_ui_chat_status("connecting pan...");
+    xiaozhi_ui_chat_status("重新连接 PAN...");
     xiaozhi_ui_chat_output("正在重连PAN...");
     xiaozhi_ui_standby_chat_output("正在重连PAN...");
     if (first_reconnect_attempts < max_reconnect_attempts)
@@ -567,13 +567,13 @@ static void check_poweron_reason(void)
 #endif
         else if (PMUC_WSR_PIN_ALL & pm_get_wakeup_src())
         {
-            rt_thread_mdelay(2500); // 延时2.5秒
+            rt_thread_mdelay(1000); // 延时1秒
 #ifdef BSP_USING_BOARD_SF32LB52_LCD_N16R8
             int val = rt_pin_read(BSP_KEY1_PIN);
 #else
             int val = rt_pin_read(BSP_KEY2_PIN);
 #endif
-            rt_kprintf("Power key level after 2.5s: %d\n", val);
+            rt_kprintf("Power key level after 1s: %d\n", val);
             if (val != KEY2_ACTIVE_LEVEL)
             {
                 // 按键已松开，认为是误触发，直接关机

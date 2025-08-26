@@ -383,31 +383,28 @@ static rt_thread_t countdown_thread = RT_NULL;
 extern rt_mailbox_t g_ui_task_mb;
 static void xz_button2_event_handler(int32_t pin, button_action_t action)
 {
-    static rt_tick_t press_tick = 0;
     if (action == BUTTON_PRESSED)
     {
-        press_tick = rt_tick_get();
-        rt_kprintf("xz_button2_event_handler\n");
+        rt_kprintf("xz_button2_event_handler - pressed\n");
+    }
+    else if (action == BUTTON_LONG_PRESSED)
+    {
+        // 按下超过3秒，触发关机
+        rt_kprintf("xz_button2_event_handler - long pressed\n");
+        //检查设备是否已绑定设备码
+        if (g_activation_context.is_activated)
+        {
+            rt_sem_release(g_activation_context.sem);
+        }
+        else
+        {
+            // 长按3秒，直接发送关机消息到ui_task
+            rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);
+        }
     }
     else if (action == BUTTON_RELEASED)
     {
-        if (press_tick != 0)
-        {
-            rt_tick_t now = rt_tick_get();
-            if ((now - press_tick) >= rt_tick_from_millisecond(3000))
-            {
-                if (g_activation_context.is_activated)
-                {
-                    rt_sem_release(g_activation_context.sem);
-                }
-                else
-                {
-                    // 长按3秒，直接发送关机消息到ui_task
-                    rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);
-                }
-            }
-        }
-        press_tick = 0;
+        rt_kprintf("xz_button2_event_handler - released\n");
     }
 }
 
