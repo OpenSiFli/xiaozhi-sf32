@@ -199,6 +199,8 @@ extern void show_shutdown(void);
 extern xz_audio_t xz_audio;
 xz_audio_t *thiz = &xz_audio;
 extern rt_mailbox_t g_battery_mb;
+extern lv_obj_t *shutdown_screen;
+extern lv_obj_t *sleep_screen;
 // 默认oled电池图标尺寸
 #define OUTLINE_W 58
 #define OUTLINE_H 33
@@ -264,9 +266,10 @@ static void startup_fade_anim_cb(void *var, int32_t value)
         lv_obj_set_style_img_opa(g_startup_img, (lv_opa_t)value, 0);
     }
 }
-static lv_timer_t *ui_sleep_timer = NULL;
+lv_timer_t *ui_sleep_timer = NULL;
 void ui_sleep_callback(lv_timer_t *timer)
 {
+    rt_kprintf("in dai_ji,so xiu mian");
     if(thiz->vad_enabled)
     {
         thiz->vad_enabled = false;
@@ -308,12 +311,6 @@ static void startup_fadeout_ready_cb(struct _lv_anim_t* anim)
     if (standby_screen) {
         rt_kprintf("开机->待机");
         lv_screen_load(standby_screen);
-         // 异步启动睡眠30s定时器
-      if (!ui_sleep_timer && g_pan_connected)
-      {
-        ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
-      }
-
     }
 
 }
@@ -1734,9 +1731,9 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         {
                             lv_timer_delete(ui_sleep_timer);
                             ui_sleep_timer = NULL;
-                            ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
                         } 
-
+                        rt_kprintf("create sleep timer1\n");
+                        ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
                         if (standby_update_timer != NULL) {
                             lv_timer_delete(standby_update_timer);
                         }
@@ -1995,7 +1992,8 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             lv_obj_t *current_screen = lv_screen_active();
             //rt_kprintf("current_screen: %p, main_container: %p\n", current_screen, main_container);
             //rt_kprintf("inactive_time: %d, limit: %d\n", lv_display_get_inactive_time(NULL), IDLE_TIME_LIMIT);
-            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen != standby_screen && current_screen != g_startup_screen)
+            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen != standby_screen && current_screen != g_startup_screen && current_screen != shutdown_screen &&
+    current_screen != sleep_screen)
             {
 
                 rt_kprintf("listen_tick\n");

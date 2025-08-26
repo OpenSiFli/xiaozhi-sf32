@@ -474,7 +474,7 @@ static void sleep_countdown_cb(lv_timer_t *timer)
         gui_pm_fsm(GUI_PM_ACTION_SLEEP);
     }
 }
-
+lv_obj_t *sleep_screen = NULL;
 void show_sleep_countdown_and_sleep(void)
 {
     if (g_sleep_countdown_active) return; // 已经在倒计时，直接返回
@@ -482,7 +482,7 @@ void show_sleep_countdown_and_sleep(void)
 
     static lv_font_t *g_tip_font = NULL;
     static lv_font_t *g_big_font = NULL;
-    static lv_obj_t *sleep_screen = NULL;
+    
     const int tip_font_size = 36;
     const int big_font_size = 120;
 
@@ -561,7 +561,7 @@ static void shutdown_countdown_cb(lv_timer_t *timer)
         while (1) {};
     }
 }
-
+lv_obj_t *shutdown_screen = NULL;
 void show_shutdown(void)
 {
     if (g_shutdown_countdown_active) return; // 已经在倒计时，直接返回
@@ -569,7 +569,6 @@ void show_shutdown(void)
 
     static lv_font_t *g_tip_font = NULL;
     static lv_font_t *g_big_font = NULL;
-    static lv_obj_t *shutdown_screen = NULL;
     const int tip_font_size = 36;
     const int big_font_size = 120;
 

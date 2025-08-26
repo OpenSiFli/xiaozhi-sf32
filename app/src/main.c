@@ -19,6 +19,7 @@
 #include <drivers/rt_drv_encoder.h>
 #include "drv_flash.h"
 #include "xiaozhi_weather.h"
+#include "lv_timer.h"
 extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
@@ -35,7 +36,9 @@ extern void xz_ws_audio_init();
 extern rt_tick_t last_listen_tick;
 extern xiaozhi_ws_t g_xz_ws;
 extern rt_mailbox_t g_button_event_mb;
+extern void ui_sleep_callback(lv_timer_t *timer);
 rt_mailbox_t g_battery_mb;
+extern lv_timer_t *ui_sleep_timer;
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -784,9 +787,15 @@ int main(void)
             xiaozhi(0, NULL);
             rt_kprintf("Select MQTT Version\n");
 #else
-xz_button_init();
+            xz_button_init();
             // xiaozhi2(0, NULL); // Start Xiaozhi
 #endif
+            // 在蓝牙和PAN连接成功后创建睡眠定时器
+            if (!ui_sleep_timer && g_pan_connected)
+            {
+                rt_kprintf("create sleep timer2\n");
+                ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
+            }
         }
         else if (value == KEEP_FIRST_PAN_RECONNECT)
         {
