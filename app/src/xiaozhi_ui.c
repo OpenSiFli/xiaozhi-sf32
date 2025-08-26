@@ -1786,8 +1786,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                             ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
 
                         } 
-                        rt_kprintf("create sleep timer1\n");
-                        ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
+
                         if (standby_update_timer != NULL) {
                             lv_timer_delete(standby_update_timer);
                         }
