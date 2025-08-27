@@ -387,7 +387,11 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
 {
     if (action == BUTTON_PRESSED)
     {
-        rt_sem_release(g_activation_context.sem);
+        lv_obj_t *now_screen = lv_screen_active();
+        if (now_screen != standby_screen)
+        {
+            rt_sem_release(g_activation_context.sem);
+        }
         rt_kprintf("xz_button2_event_handler - pressed\n");
     }
     else if (action == BUTTON_LONG_PRESSED)
