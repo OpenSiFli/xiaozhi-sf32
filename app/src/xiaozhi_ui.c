@@ -1005,6 +1005,7 @@ rt_err_t xiaozhi_ui_obj_init()
 
 
 
+
 /*------------------电池---------------------*/
     g_battery_fill = lv_obj_create(battery_outline);
     lv_obj_set_style_outline_width(g_battery_fill, 0, 0);
@@ -1783,8 +1784,10 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         {
                             rt_kprintf("create sleep timer1\n");
                             ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
-                        } 
 
+                        } 
+                        rt_kprintf("create sleep timer1\n");
+                        ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
                         if (standby_update_timer != NULL) {
                             lv_timer_delete(standby_update_timer);
                         }

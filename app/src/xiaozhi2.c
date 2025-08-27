@@ -402,8 +402,8 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
 
             // 长按3秒，直接发送关机消息到ui_task
         rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);
-        
     }
+
     else if (action == BUTTON_RELEASED)
     {
         rt_kprintf("xz_button2_event_handler - released\n");
