@@ -220,18 +220,18 @@ static void battery_level_task(void *parameter)
         // 获取到的是电池电压，单位是mV
         // 假设电池电压范围是3.6V到4.2V，对应的电量范围是0%到100%
         uint32_t battery_percentage = 0;
-        if (battery_level < 3600)
+        if (battery_level < 36000)
         {
             battery_percentage = 0; // 小于3.6V，电量为0
         }
-        else if (battery_level > 4200)
+        else if (battery_level > 42000)
         {
             battery_percentage = 100; // 大于4.2V，电量为100
         }
         else
         {
             // 线性插值计算电量百分比
-            battery_percentage = ((battery_level - 3600) * 100) / (4200 - 3600);
+            battery_percentage = ((battery_level - 36000) * 100) / (42000 - 36000);
         }
 
         rt_mb_send(g_battery_mb, battery_percentage);
