@@ -41,7 +41,9 @@ typedef enum {
     UI_MSG_SWITCH_TO_STANDBY,
     UI_MSG_SWITCH_TO_MAIN,
     UI_MSG_UPDATE_WEATHER_AND_TIME,
-    UI_MSG_STANDBY_CHAT_OUTPUT 
+    UI_MSG_STANDBY_CHAT_OUTPUT,
+    UI_MSG_VOLUME_UPDATE,  //更新下拉菜单里面的音量进度条
+    UI_MSG_BRIGHTNESS_UPDATE  //更新下拉菜单里面的亮度进度条
 
 } ui_msg_type_t;
 
@@ -68,6 +70,10 @@ static lv_style_t style;
 static lv_style_t style2;
 
 static lv_style_t style_battery;
+
+static lv_obj_t* volume_slider = NULL;
+static lv_obj_t* brightness_lines = NULL;
+
 /*缩放因子*/
 static float g_scale = 1.0f;
 #define SCALE_DPX(val) LV_DPX((val) * g_scale)
@@ -993,9 +999,9 @@ rt_err_t xiaozhi_ui_obj_init()
     create_tip_label(cont, "唤醒", 2, 0); //aec
     create_switch(cont, aec_switch_event_handler, 2, 2, 0);
     create_tip_label(cont, "音量", 3, 0);
-    create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
+    volume_slider = create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
     create_tip_label(cont, "亮度", 4, 0);
-    create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
+    brightness_lines = create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
 
 
 
@@ -1135,7 +1141,48 @@ rt_err_t xiaozhi_ui_obj_init()
     return RT_EOK;
 }
 
-
+// 音量进度条更新函数
+void xiaozhi_ui_update_volume(int volume)
+{
+    if (ui_msg_queue != RT_NULL) {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_VOLUME_UPDATE;
+            msg->data = (char*)rt_malloc(sizeof(int));
+            if (msg->data != RT_NULL) {
+                *((int*)msg->data) = volume;
+                if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                    LOG_E("Failed to send volume update UI message");
+                    rt_free(msg->data);
+                    rt_free(msg);
+                }
+            } else {
+                rt_free(msg);
+            }
+        }
+    }
+}
+//屏幕亮度进度条更新函数
+void xiaozhi_ui_update_brightness(int brightness)
+{
+    if (ui_msg_queue != RT_NULL) {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_BRIGHTNESS_UPDATE;
+            msg->data = (char*)rt_malloc(sizeof(int));
+            if (msg->data != RT_NULL) {
+                *((int*)msg->data) = brightness;
+                if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                    LOG_E("Failed to send brightness update UI message");
+                    rt_free(msg->data);
+                    rt_free(msg);
+                }
+            } else {
+                rt_free(msg);
+            }
+        }
+    }
+}
 
 void xiaozhi_ui_update_standby_emoji(char *string) // emoji
 {
@@ -1784,6 +1831,34 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         lv_label_set_text(global_label2, msg->data);    
                     }
                     break;
+                case UI_MSG_VOLUME_UPDATE:
+                    if(msg->data) {
+                        int volume = *((int*)msg->data);
+                        if (volume_slider) {
+                            lv_slider_set_value(volume_slider, volume, LV_ANIM_OFF);
+                        }
+                    }
+                    break; 
+                case UI_MSG_BRIGHTNESS_UPDATE:
+                    if(msg->data) {
+                        int brightness = *((int*)msg->data);
+                        // 更新亮度显示条
+                        if (brightness_lines) {
+                            uint32_t cnt = lv_obj_get_child_count(brightness_lines);
+                            lv_obj_t* child;
+                            uint16_t i = 0;
+                            // 根据亮度值更新显示条的颜色
+                            while(i < cnt) {
+                                child = lv_obj_get_child(brightness_lines, i);
+                                if (brigtness_tb[i] <= brightness)
+                                    lv_obj_set_style_bg_color(child, lv_palette_main(LV_PALETTE_LIGHT_GREEN), 0);
+                                else
+                                    lv_obj_set_style_bg_color(child, lv_palette_main(LV_PALETTE_GREY), 0);
+                                i++;
+                            }
+                        }
+                    }
+                    break;      
                 case UI_MSG_UPDATE_EMOJI:
                     if(msg->data)
                     {

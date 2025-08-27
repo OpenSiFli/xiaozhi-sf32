@@ -3,6 +3,8 @@
 
 #include "lv_image_dsc.h"
 
+
+
 extern const lv_image_dsc_t angry_1;
 extern const lv_image_dsc_t angry_2;
 extern const lv_image_dsc_t angry_3;
@@ -1293,6 +1295,7 @@ const lv_image_dsc_t * thinking[] =
 };
 
 /*---------------------thinking*/
+
 
 
 #endif // _XIAOZHI_UI_H_

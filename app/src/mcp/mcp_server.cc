@@ -11,10 +11,12 @@
 #include "rgbled_mcp.h" 
 // #include "lwip/apps/websocket_client.h"   // 提供 wsock_write 和 OPCODE_TEXT 定义
 #include "../xiaozhi2.h"        // 提供 g_xz_ws 定义
-
 extern xiaozhi_ws_t g_xz_ws;   
        
-
+extern "C" {
+extern void xiaozhi_ui_update_volume(int volume);
+extern void xiaozhi_ui_update_brightness(int brightness);
+}
 
 
 
@@ -54,6 +56,7 @@ void McpServer::AddCommonTools() {
                 speaker->Invoke(command);
                 cJSON_Delete(command); // 使用完记得释放内存
             }
+            xiaozhi_ui_update_volume(volume);
             return true;
         });
 
@@ -86,6 +89,7 @@ void McpServer::AddCommonTools() {
                 screen->Invoke(command);
                 cJSON_Delete(command);
             }
+            xiaozhi_ui_update_brightness(brightness);
             return true;
         });
 
