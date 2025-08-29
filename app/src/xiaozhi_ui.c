@@ -1258,7 +1258,7 @@ extern weather_info_t g_current_weather;
 void update_xiaozhi_ui_time(void *parameter)
 {
 
-// 更新当前时间信息
+// 获取当前时间
     xiaozhi_time_get_current(&g_current_time);
 
     // 使用消息队列发送更新UI的消息到UI线程

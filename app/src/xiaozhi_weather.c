@@ -602,52 +602,6 @@ void time_ui_update_callback(void)
 }
 
 
-//更新RTC时间
-int xiaozhi_rtc_update(time_t timestamp)
-{
-    if (timestamp <= 0)
-    {
-        LOG_E("Invalid timestamp: %ld", (long)timestamp);
-        return -RT_ERROR;
-    }
-
-    // 尝试更新RTC设备
-    if (g_rtc_device)
-    {
-        rt_err_t result = rt_device_control(
-            g_rtc_device, RT_DEVICE_CTRL_RTC_SET_TIME, &timestamp);
-        if (result == RT_EOK)
-        {
-            LOG_I("RTC time updated successfully: %ld", (long)timestamp);
-
-            // 验证RTC时间是否正确设置
-            time_t verify_time = 0;
-            result = rt_device_control(
-                g_rtc_device, RT_DEVICE_CTRL_RTC_GET_TIME, &verify_time);
-            if (result == RT_EOK)
-            {
-                LOG_E("verify_time: %ld", (long)verify_time);
-                return RT_EOK;
-            }
-            else
-            {
-                LOG_E("Failed to verify RTC time after setting");
-                return -RT_ERROR;
-            }
-        }
-        else
-        {
-            LOG_E("Failed to update RTC time: %d", result);
-            return -RT_ERROR;
-        }
-    }
-    else
-    {
-        LOG_W("RTC device not available, cannot store time");
-        return -RT_ERROR;
-    }
-}
-
 void weather_ui_update_callback(void)
 {
          // 更新天气信息
@@ -881,33 +835,16 @@ int xiaozhi_ntp_sync(void)
     // 尝试多个NTP服务器
     for (int i = 0; i < sizeof(ntp_servers) / sizeof(ntp_servers[0]); i++)
     {
+        rt_kprintf("Trying NTP server: %s\n", ntp_servers[i]);
 
 #ifdef PKG_USING_NETUTILS
-        // 尝试使用RT-Thread的NTP功能
-        extern time_t ntp_get_time(const char *host_name);
         extern time_t ntp_sync_to_rtc(const char *host_name);
-
-        // 先获取时间
-        cur_time = ntp_get_time(ntp_servers[i]);
-        if (cur_time > 1000000000)
-        { // 基本的时间有效性检查（大约是2001年之后）
+        // 获取服务时间并设置rtc时间
+        cur_time = ntp_sync_to_rtc(ntp_servers[i]);
+        if (cur_time > 1000000000)// 基本的时间有效性检查（大约是2001年之后）
+        { 
             sync_success = 1;
-
-            // 验证获取的时间转换结果
-            // struct tm *ntp_local = localtime(&cur_time);
-            // LOG_I("ntp_local:%d-%d-%d %d:%d:%d\n", ntp_local->tm_year + 1900, ntp_local->tm_mon + 1, ntp_local->tm_mday,
-            //       ntp_local->tm_hour, ntp_local->tm_min, ntp_local->tm_sec);
-
-            // 尝试直接同步到RTC
-            time_t sync_result = ntp_sync_to_rtc(ntp_servers[i]);
-            if (sync_result > 0)
-            {
-                cur_time = sync_result; // 使用RTC返回的时间
-            }
-            else
-            {
-                LOG_W("NTP direct RTC sync failed, will manually update RTC");
-            }
+            
         }
 #else
         // 如果没有NTP支持，使用系统时间
@@ -921,24 +858,32 @@ int xiaozhi_ntp_sync(void)
 
         if (sync_success)
         {
-            // 确保时间写入RTC（关键步骤）
-            if (xiaozhi_rtc_update(cur_time) == RT_EOK)
+            // 验证RTC时间是否正确设置
+            time_t verify_time = 0;
+            rt_err_t result = rt_device_control(
+                g_rtc_device, RT_DEVICE_CTRL_RTC_GET_TIME, &verify_time);
+            if (result == RT_EOK)
             {
-                LOG_I("Time successfully stored to RTC");
+                LOG_I("RTC time verification successful: %ld", (long)verify_time);
+                // 检查设置的时间和获取的时间是否一致
+                if (verify_time == cur_time) {
+                    LOG_I("RTC time matches NTP time");
+                } else {
+                    LOG_W("RTC time mismatch. NTP: %ld, RTC: %ld", (long)cur_time, (long)verify_time);
+                }
             }
             else
             {
-                LOG_W("Failed to store time to RTC, but sync considered "
-                      "successful");
+                LOG_E("Failed to verify RTC time: %d", result);
             }
-                        // 清除同步进行标志
+            // 清除同步进行标志
             g_ntp_sync_in_progress = 0;
             return RT_EOK;
         }
 
         rt_thread_mdelay(1000); // 等待1秒再尝试下一个服务器
     }
-        // 清除同步进行标志
+    // 清除同步进行标志
     g_ntp_sync_in_progress = 0;
     return -RT_ERROR;
 }
@@ -958,10 +903,10 @@ void xiaozhi_time_weather(void)//获取最新时间和天气
             return;
 
         }
-        ntp_result = xiaozhi_ntp_sync();
+        ntp_result = xiaozhi_ntp_sync();//同步网络服务时间
         if (ntp_result == RT_EOK) 
         {
-            update_xiaozhi_ui_time(NULL);
+            update_xiaozhi_ui_time(NULL);//更新界面时间显示
             LOG_I("Time synchronization successful, next sync in 30min");
             break;
         } 

@@ -387,11 +387,7 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
 {
     if (action == BUTTON_PRESSED)
     {
-        lv_obj_t *now_screen = lv_screen_active();
-        if (now_screen != standby_screen)
-        {
-            rt_sem_release(g_activation_context.sem);
-        }
+
         rt_kprintf("xz_button2_event_handler - pressed\n");
     }
     else if (action == BUTTON_LONG_PRESSED)
@@ -405,6 +401,11 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
         // }
 
             // 长按3秒，直接发送关机消息到ui_task
+        lv_obj_t *now_screen = lv_screen_active();
+        if (now_screen != standby_screen)
+        {
+            rt_sem_release(g_activation_context.sem);
+        }
         rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);
     }
 
