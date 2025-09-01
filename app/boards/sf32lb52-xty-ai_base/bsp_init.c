@@ -49,6 +49,14 @@
     #define LXT_LP_CYCLE 200
 #endif
 
+#ifndef PWRKEY_CNT_CLOCK_FREQ
+    #define PWRKEY_CNT_CLOCK_FREQ  (32000)
+#endif
+
+#ifndef PWRKEY_HARD_RESET_TIME
+    #define PWRKEY_HARD_RESET_TIME     (30)   /* unit:s */
+#endif
+
 static uint16_t mpi1_div = 1;
 static uint16_t mpi2_div = 1;
 
@@ -168,6 +176,7 @@ void HAL_PreInit(void)
         HAL_HPAON_StartGTimer();
         HAL_PMU_EnableRC32K(1);
         HAL_PMU_LpCLockSelect(PMU_LPCLK_RC32);
+        hwp_pmuc->PWRKEY_CNT = PWRKEY_CNT_CLOCK_FREQ * PWRKEY_HARD_RESET_TIME;
 
         HAL_PMU_EnableDLL(1);
 

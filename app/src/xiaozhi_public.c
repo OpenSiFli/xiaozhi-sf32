@@ -431,6 +431,7 @@ static volatile int g_sleep_countdown_active = 0; // 休眠倒计时标志
 
 extern rt_timer_t update_time_ui_timer;
 extern rt_timer_t update_weather_ui_timer;
+lv_obj_t *sleep_screen = NULL;
 static void sleep_countdown_cb(lv_timer_t *timer)
 {
     
@@ -471,6 +472,8 @@ static void sleep_countdown_cb(lv_timer_t *timer)
         {
            rt_pm_release(PM_SLEEP_MODE_IDLE);
         }
+        lv_obj_clean(sleep_screen);
+        rt_thread_delay(100);
         gui_pm_fsm(GUI_PM_ACTION_SLEEP);
     }
 }
@@ -482,7 +485,7 @@ void show_sleep_countdown_and_sleep(void)
 
     static lv_font_t *g_tip_font = NULL;
     static lv_font_t *g_big_font = NULL;
-    static lv_obj_t *sleep_screen = NULL;
+    
     const int tip_font_size = 36;
     const int big_font_size = 120;
 
@@ -532,9 +535,18 @@ static lv_obj_t *shutdown_label = NULL;
 static int shutdown_countdown = 3;
 static lv_timer_t *shutdown_timer = NULL;
 static volatile int g_shutdown_countdown_active = 0; // 关机倒计时标志
-
+lv_obj_t *shutdown_screen = NULL;
+uint8_t i = 0;
 static void shutdown_countdown_cb(lv_timer_t *timer)
 {
+    if(i == 1)
+    {
+        lv_timer_delete(shutdown_timer);
+        shutdown_timer = NULL;
+        // 执行关机
+        PowerDownCustom();
+        rt_kprintf("bu gai chu xian\n");  
+    }
     if (shutdown_label && shutdown_countdown > 0)
     {
         char num[2] = {0};
@@ -551,15 +563,13 @@ static void shutdown_countdown_cb(lv_timer_t *timer)
             shutdown_label = NULL;
         }
         
-        lv_timer_delete(shutdown_timer);
-        shutdown_timer = NULL;
         g_shutdown_countdown_active = 0; // 倒计时结束，清除标志
-        rt_kprintf("shutdown countdown ok\n");  
-        
-        // 执行关机
-        PowerDownCustom();
-        while (1) {};
+        rt_kprintf("shutdown countdown ok\n");
+        lv_obj_clean(shutdown_screen);
+        rt_thread_delay(200);
+        i = 1;
     }
+
 }
 
 void show_shutdown(void)
@@ -569,7 +579,6 @@ void show_shutdown(void)
 
     static lv_font_t *g_tip_font = NULL;
     static lv_font_t *g_big_font = NULL;
-    static lv_obj_t *shutdown_screen = NULL;
     const int tip_font_size = 36;
     const int big_font_size = 120;
 

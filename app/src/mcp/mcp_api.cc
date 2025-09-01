@@ -16,7 +16,7 @@ extern "C"
 
     void MCP_RGBLED_CLOSE()
     {
-#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+#if defined(BSP_USING_BOARD_SF32LB52_NANO_52J) || defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
         rt_pin_write(32, PIN_HIGH);
 #else
         if (RGBLEDTool::is_color_cycling_)

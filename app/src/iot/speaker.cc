@@ -3,6 +3,8 @@
 // 添加 C 接口头文件
 extern "C" {
 #include "audio_server.h"
+//#include "../xiaozhi_ui.h"
+extern void xiaozhi_ui_update_volume(int volume);
 }
 
 
@@ -28,6 +30,7 @@ public:
             }
             
             audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, volume);
+            xiaozhi_ui_update_volume(volume);
         });
 
         // 新增方法：GetVolume（获取音量）

@@ -19,7 +19,7 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "./mcp/mcp_api.h"
-#define IDLE_TIME_LIMIT  (30000)
+#define IDLE_TIME_LIMIT  (20000)
 #define SHOW_TEXT_LEN 100
 #include "lv_seqimg.h"
 #include "xiaozhi_ui.h"
@@ -41,7 +41,9 @@ typedef enum {
     UI_MSG_SWITCH_TO_STANDBY,
     UI_MSG_SWITCH_TO_MAIN,
     UI_MSG_UPDATE_WEATHER_AND_TIME,
-    UI_MSG_STANDBY_CHAT_OUTPUT 
+    UI_MSG_STANDBY_CHAT_OUTPUT,
+    UI_MSG_VOLUME_UPDATE,  //更新下拉菜单里面的音量进度条
+    UI_MSG_BRIGHTNESS_UPDATE  //更新下拉菜单里面的亮度进度条
 
 } ui_msg_type_t;
 
@@ -68,6 +70,10 @@ static lv_style_t style;
 static lv_style_t style2;
 
 static lv_style_t style_battery;
+
+static lv_obj_t* volume_slider = NULL;
+static lv_obj_t* brightness_lines = NULL;
+
 /*缩放因子*/
 static float g_scale = 1.0f;
 #define SCALE_DPX(val) LV_DPX((val) * g_scale)
@@ -199,6 +205,8 @@ extern void show_shutdown(void);
 extern xz_audio_t xz_audio;
 xz_audio_t *thiz = &xz_audio;
 extern rt_mailbox_t g_battery_mb;
+extern lv_obj_t *shutdown_screen;
+extern lv_obj_t *sleep_screen;
 // 默认oled电池图标尺寸
 #define OUTLINE_W 58
 #define OUTLINE_H 33
@@ -264,9 +272,10 @@ static void startup_fade_anim_cb(void *var, int32_t value)
         lv_obj_set_style_img_opa(g_startup_img, (lv_opa_t)value, 0);
     }
 }
-static lv_timer_t *ui_sleep_timer = NULL;
+lv_timer_t *ui_sleep_timer = NULL;
 void ui_sleep_callback(lv_timer_t *timer)
 {
+    rt_kprintf("in dai_ji,so xiu mian");
     if(thiz->vad_enabled)
     {
         thiz->vad_enabled = false;
@@ -308,12 +317,6 @@ static void startup_fadeout_ready_cb(struct _lv_anim_t* anim)
     if (standby_screen) {
         rt_kprintf("开机->待机");
         lv_screen_load(standby_screen);
-         // 异步启动睡眠30s定时器
-      if (!ui_sleep_timer && g_pan_connected)
-      {
-        ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
-      }
-
     }
 
 }
@@ -991,14 +994,15 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_add_event_cb(cont, cont_event_handler, LV_EVENT_ALL, NULL);
 #endif
 
-    create_tip_label(cont, "No_Inter", 1, 0); //vad
+    create_tip_label(cont, "不打断", 1, 0); //vad
     create_switch(cont, vad_switch_event_handler, 1, 2, 1);
-    create_tip_label(cont, "Wake_up", 2, 0); //aec
+    create_tip_label(cont, "唤醒", 2, 0); //aec
     create_switch(cont, aec_switch_event_handler, 2, 2, 0);
-    create_tip_label(cont, "VOL", 3, 0);
-    create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
-    create_tip_label(cont, "BRT", 4, 0);
-    create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
+    create_tip_label(cont, "音量", 3, 0);
+    volume_slider = create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
+    create_tip_label(cont, "亮度", 4, 0);
+    brightness_lines = create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
+
 
 
 
@@ -1138,7 +1142,48 @@ rt_err_t xiaozhi_ui_obj_init()
     return RT_EOK;
 }
 
-
+// 音量进度条更新函数
+void xiaozhi_ui_update_volume(int volume)
+{
+    if (ui_msg_queue != RT_NULL) {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_VOLUME_UPDATE;
+            msg->data = (char*)rt_malloc(sizeof(int));
+            if (msg->data != RT_NULL) {
+                *((int*)msg->data) = volume;
+                if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                    LOG_E("Failed to send volume update UI message");
+                    rt_free(msg->data);
+                    rt_free(msg);
+                }
+            } else {
+                rt_free(msg);
+            }
+        }
+    }
+}
+//屏幕亮度进度条更新函数
+void xiaozhi_ui_update_brightness(int brightness)
+{
+    if (ui_msg_queue != RT_NULL) {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_BRIGHTNESS_UPDATE;
+            msg->data = (char*)rt_malloc(sizeof(int));
+            if (msg->data != RT_NULL) {
+                *((int*)msg->data) = brightness;
+                if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                    LOG_E("Failed to send brightness update UI message");
+                    rt_free(msg->data);
+                    rt_free(msg);
+                }
+            } else {
+                rt_free(msg);
+            }
+        }
+    }
+}
 
 void xiaozhi_ui_update_standby_emoji(char *string) // emoji
 {
@@ -1213,7 +1258,7 @@ extern weather_info_t g_current_weather;
 void update_xiaozhi_ui_time(void *parameter)
 {
 
-// 更新当前时间信息
+// 获取当前时间
     xiaozhi_time_get_current(&g_current_time);
 
     // 使用消息队列发送更新UI的消息到UI线程
@@ -1734,7 +1779,12 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         {
                             lv_timer_delete(ui_sleep_timer);
                             ui_sleep_timer = NULL;
+                        }
+                        if(g_pan_connected)
+                        {
+                            rt_kprintf("create sleep timer1\n");
                             ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
+
                         } 
 
                         if (standby_update_timer != NULL) {
@@ -1783,6 +1833,34 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         lv_label_set_text(global_label2, msg->data);    
                     }
                     break;
+                case UI_MSG_VOLUME_UPDATE:
+                    if(msg->data) {
+                        int volume = *((int*)msg->data);
+                        if (volume_slider) {
+                            lv_slider_set_value(volume_slider, volume, LV_ANIM_OFF);
+                        }
+                    }
+                    break; 
+                case UI_MSG_BRIGHTNESS_UPDATE:
+                    if(msg->data) {
+                        int brightness = *((int*)msg->data);
+                        // 更新亮度显示条
+                        if (brightness_lines) {
+                            uint32_t cnt = lv_obj_get_child_count(brightness_lines);
+                            lv_obj_t* child;
+                            uint16_t i = 0;
+                            // 根据亮度值更新显示条的颜色
+                            while(i < cnt) {
+                                child = lv_obj_get_child(brightness_lines, i);
+                                if (brigtness_tb[i] <= brightness)
+                                    lv_obj_set_style_bg_color(child, lv_palette_main(LV_PALETTE_LIGHT_GREEN), 0);
+                                else
+                                    lv_obj_set_style_bg_color(child, lv_palette_main(LV_PALETTE_GREY), 0);
+                                i++;
+                            }
+                        }
+                    }
+                    break;      
                 case UI_MSG_UPDATE_EMOJI:
                     if(msg->data)
                     {
@@ -1995,7 +2073,8 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             lv_obj_t *current_screen = lv_screen_active();
             //rt_kprintf("current_screen: %p, main_container: %p\n", current_screen, main_container);
             //rt_kprintf("inactive_time: %d, limit: %d\n", lv_display_get_inactive_time(NULL), IDLE_TIME_LIMIT);
-            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen != standby_screen && current_screen != g_startup_screen)
+            if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen != standby_screen && current_screen != g_startup_screen && current_screen != shutdown_screen &&
+    current_screen != sleep_screen)
             {
 
                 rt_kprintf("listen_tick\n");

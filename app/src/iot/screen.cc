@@ -4,6 +4,7 @@
 // C 接口头文件
 extern "C" {
 #include <rtthread.h>
+extern void xiaozhi_ui_update_brightness(int brightness);
 }
 
 // 定义设备名
@@ -47,6 +48,7 @@ public:
             if (lcd_device_) {
                 rt_device_control(lcd_device_, RTGRAPHIC_CTRL_SET_BRIGHTNESS, &brightness);
                 rt_kprintf("Brightness set to: %d", brightness);
+                xiaozhi_ui_update_brightness(brightness);
             } else {
                 rt_kprintf("LCD device is NULL, cannot set brightness");
             }

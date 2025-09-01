@@ -17,7 +17,7 @@ void RGBLEDTool::ColorCycleThreadEntry(void* param) {
     int index = 0;
     uint32_t toggle = 0; // 用于52J板子的LED切换状态
     while (is_color_cycling_) {
-#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+#if defined(BSP_USING_BOARD_SF32LB52_NANO_52J) || defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
         // 对于52J板子，控制PA32引脚以1秒周期亮灭
         rt_pin_write(LED_PIN, toggle ? PIN_HIGH : PIN_LOW);
         toggle = !toggle;
@@ -43,7 +43,7 @@ void RGBLEDTool::RegisterRGBLEDTool(McpServer* server) {
             [](const PropertyList&) -> ReturnValue {
             if (is_color_cycling_) return true;
             is_color_cycling_ = true;
-#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+#if defined(BSP_USING_BOARD_SF32LB52_NANO_52J) || defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
             // 配置PA32为GPIO输出模式并输出低电平（点亮）
             rt_pin_mode(LED_PIN, PIN_MODE_OUTPUT);
             rt_pin_write(LED_PIN, PIN_LOW);
@@ -66,7 +66,7 @@ void RGBLEDTool::RegisterRGBLEDTool(McpServer* server) {
         [](const PropertyList&) -> ReturnValue {
             is_color_cycling_ = false;
             rt_thread_mdelay(100); 
-#ifdef BSP_USING_BOARD_SF32LB52_NANO_52J
+#if defined(BSP_USING_BOARD_SF32LB52_NANO_52J) || defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
             // 对于52J板子，控制PA32引脚输出高电平熄灭LED
             rt_pin_write(LED_PIN, PIN_HIGH);
 #else

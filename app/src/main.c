@@ -19,6 +19,8 @@
 #include <drivers/rt_drv_encoder.h>
 #include "drv_flash.h"
 #include "xiaozhi_weather.h"
+#include "lv_timer.h"
+#include "lv_display.h"
 extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
@@ -35,7 +37,12 @@ extern void xz_ws_audio_init();
 extern rt_tick_t last_listen_tick;
 extern xiaozhi_ws_t g_xz_ws;
 extern rt_mailbox_t g_button_event_mb;
+extern void ui_sleep_callback(lv_timer_t *timer);
+extern lv_obj_t *standby_screen;
 rt_mailbox_t g_battery_mb;
+extern lv_timer_t *ui_sleep_timer;
+extern lv_obj_t *shutdown_screen;
+extern lv_obj_t *sleep_screen;
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -213,18 +220,18 @@ static void battery_level_task(void *parameter)
         // 获取到的是电池电压，单位是mV
         // 假设电池电压范围是3.6V到4.2V，对应的电量范围是0%到100%
         uint32_t battery_percentage = 0;
-        if (battery_level < 3600)
+        if (battery_level < 36000)
         {
             battery_percentage = 0; // 小于3.6V，电量为0
         }
-        else if (battery_level > 4200)
+        else if (battery_level > 42000)
         {
             battery_percentage = 100; // 大于4.2V，电量为100
         }
         else
         {
             // 线性插值计算电量百分比
-            battery_percentage = ((battery_level - 3600) * 100) / (4200 - 3600);
+            battery_percentage = ((battery_level - 36000) * 100) / (42000 - 36000);
         }
 
         rt_mb_send(g_battery_mb, battery_percentage);
@@ -331,7 +338,7 @@ void pan_reconnect()
 
     LOG_I("Attempting to reconnect PAN, attempt %d",
           first_reconnect_attempts + 1);
-    xiaozhi_ui_chat_status("connecting pan...");
+    xiaozhi_ui_chat_status("重新连接 PAN...");
     xiaozhi_ui_chat_output("正在重连PAN...");
     xiaozhi_ui_standby_chat_output("正在重连PAN...");
     if (first_reconnect_attempts < max_reconnect_attempts)
@@ -394,6 +401,11 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             g_bt_app_env.bt_connected = FALSE;
             xiaozhi_ui_chat_output("蓝牙断开连接");
             xiaozhi_ui_standby_chat_output("蓝牙断开连接");//待机画面
+            lv_obj_t *now_screen = lv_screen_active();
+            if (now_screen != standby_screen && now_screen != sleep_screen && now_screen != shutdown_screen)
+                {
+                    ui_swith_to_standby_screen();
+                }
             //  memset(&g_bt_app_env.bd_addr, 0xFF,
             //  sizeof(g_bt_app_env.bd_addr));
                  if (info->res == BT_NOTIFY_COMMON_SCO_DISCONNECTED) 
@@ -567,13 +579,13 @@ static void check_poweron_reason(void)
 #endif
         else if (PMUC_WSR_PIN_ALL & pm_get_wakeup_src())
         {
-            rt_thread_mdelay(2500); // 延时2.5秒
+            rt_thread_mdelay(1000); // 延时1秒
 #ifdef BSP_USING_BOARD_SF32LB52_LCD_N16R8
             int val = rt_pin_read(BSP_KEY1_PIN);
 #else
             int val = rt_pin_read(BSP_KEY2_PIN);
 #endif
-            rt_kprintf("Power key level after 2.5s: %d\n", val);
+            rt_kprintf("Power key level after 1s: %d\n", val);
             if (val != KEY2_ACTIVE_LEVEL)
             {
                 // 按键已松开，认为是误触发，直接关机
@@ -767,7 +779,7 @@ int main(void)
         else if (value == BT_APP_CONNECT_PAN_SUCCESS)
         {
             rt_kputs("BT_APP_CONNECT_PAN_SUCCESS\r\n");
-            xiaozhi_ui_chat_output("初始化 请稍等...");
+            //xiaozhi_ui_chat_output("初始化 请稍等...");
             xiaozhi_ui_standby_chat_output("初始化 请稍等...");
             xiaozhi_ui_update_ble("open");
             xiaozhi_ui_chat_status("初始化...");
@@ -777,16 +789,22 @@ int main(void)
             rt_thread_mdelay(2000);
             // 执行NTP与天气同步
             xiaozhi_time_weather();
-            xiaozhi_ui_chat_output("连接小智中...");
+            //xiaozhi_ui_chat_output("连接小智中...");
             xiaozhi_ui_standby_chat_output("请按键连接小智...");
 
 #ifdef XIAOZHI_USING_MQTT
             xiaozhi(0, NULL);
             rt_kprintf("Select MQTT Version\n");
 #else
-xz_button_init();
+            xz_button_init();
             // xiaozhi2(0, NULL); // Start Xiaozhi
 #endif
+            // 在蓝牙和PAN连接成功后创建睡眠定时器
+            if (!ui_sleep_timer && g_pan_connected)
+            {
+                rt_kprintf("create sleep timer2\n");
+                ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
+            }
         }
         else if (value == KEEP_FIRST_PAN_RECONNECT)
         {

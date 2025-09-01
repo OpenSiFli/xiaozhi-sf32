@@ -243,9 +243,15 @@ static void BSP_PIN_Common(void)
     HAL_PIN_Set(PAD_PA21, GPIO_A21, PIN_PULLDOWN, 1);
 #endif
 
-    HAL_PIN_Set(PAD_PA11, GPIO_A11, PIN_PULLDOWN, 1); // 漏电
+#ifdef BSP_USING_BOARD_SF32LB52_XTY_AI_THT
     HAL_PIN_Set(PAD_PA38, GPIO_A38, PIN_PULLDOWN, 1); // 漏电
     HAL_PIN_Set(PAD_PA40, GPIO_A40, PIN_PULLDOWN, 1); // 漏电
+#else
+    HAL_PIN_Set(PAD_PA38, GPIO_A38, PIN_PULLUP, 1); // 漏电
+    HAL_PIN_Set(PAD_PA40, GPIO_A40, PIN_PULLUP, 1); // 漏电
+#endif
+
+    HAL_PIN_Set(PAD_PA11, GPIO_A11, PIN_PULLDOWN, 1); // 漏电
 #endif
 
 }
