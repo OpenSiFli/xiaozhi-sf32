@@ -15,7 +15,7 @@
 #include "et_keyword.h"
 #include "et_thres_list.h"
 #include "et_weights.h"
-#include "et_config/third_kws_event.h"
+#include "third_kws_event.h"
 #include "xiaozhi_public.h"
 extern void  simulate_button_pressed();
 
