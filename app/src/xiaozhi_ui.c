@@ -58,6 +58,8 @@ rt_mq_t ui_msg_queue = RT_NULL;
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
 rt_mailbox_t g_ui_task_mb =RT_NULL;
+static lv_obj_t* wakeup_switch = NULL;
+static lv_obj_t* interrupt_switch = NULL;
 // 开机动画相关全局变量
 static struct rt_semaphore update_ui_sema;
 extern const lv_image_dsc_t startup_logo;  //开机动画图标
@@ -219,6 +221,40 @@ extern lv_obj_t *sleep_screen;
 static int g_battery_level = 60;        // 默认为满电
 static lv_obj_t *g_battery_fill = NULL;  // 电池填充对象
 static lv_obj_t *g_battery_label = NULL; // 电量标签
+
+void ctrl_wakeup(bool is_wakeup)
+{
+    if (wakeup_switch != NULL) 
+    {
+        if(is_wakeup)
+        {
+            lv_obj_add_state(wakeup_switch, LV_STATE_CHECKED);
+            aec_enabled = 1;
+        }
+        else
+        {
+            lv_obj_clear_state(wakeup_switch, LV_STATE_CHECKED);
+            aec_enabled = 0;
+        }
+    }
+}
+
+void ctrl_interrupt(bool is_interrupt)
+{
+    if (interrupt_switch != NULL) 
+    {
+        if(!is_interrupt)
+        {
+            lv_obj_add_state(interrupt_switch, LV_STATE_CHECKED);
+            vad_enable = 1; //1是不打断
+        }
+        else
+        {
+            lv_obj_clear_state(interrupt_switch, LV_STATE_CHECKED);
+            vad_enable = 0;
+        }
+    }
+}
 
 // 亮度表需要按照从小到大排序
 static const uint16_t brigtness_tb[] = 
@@ -995,9 +1031,9 @@ rt_err_t xiaozhi_ui_obj_init()
 #endif
 
     create_tip_label(cont, "不打断", 1, 0); //vad
-    create_switch(cont, vad_switch_event_handler, 1, 2, 1);
+    interrupt_switch = create_switch(cont, vad_switch_event_handler, 1, 2, 1);
     create_tip_label(cont, "唤醒", 2, 0); //aec
-    create_switch(cont, aec_switch_event_handler, 2, 2, 0);
+    wakeup_switch = create_switch(cont, aec_switch_event_handler, 2, 2, 0);
     create_tip_label(cont, "音量", 3, 0);
     volume_slider = create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
     create_tip_label(cont, "亮度", 4, 0);

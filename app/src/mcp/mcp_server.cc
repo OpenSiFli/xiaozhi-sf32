@@ -12,10 +12,13 @@
 // #include "lwip/apps/websocket_client.h"   // 提供 wsock_write 和 OPCODE_TEXT 定义
 #include "../xiaozhi2.h"        // 提供 g_xz_ws 定义
 extern xiaozhi_ws_t g_xz_ws;   
-       
+extern uint8_t aec_enabled;
+extern uint8_t vad_enable;
 extern "C" {
 extern void xiaozhi_ui_update_volume(int volume);
 extern void xiaozhi_ui_update_brightness(int brightness);
+extern void ctrl_wakeup(bool is_wakeup);
+extern void ctrl_interrupt(bool is_interrupt);
 }
 
 
@@ -112,8 +115,63 @@ void McpServer::AddCommonTools() {
         });
     }
     
-    // 添加RGB LED工具
-    RGBLEDTool::RegisterRGBLEDTool(this);
+        // 添加RGB LED工具
+        RGBLEDTool::RegisterRGBLEDTool(this);
+
+    //添加唤醒工具
+    AddTool("self.wakeup.enable",
+        "Enable the wakeup function.",
+        PropertyList(),
+        [=](const PropertyList&) -> ReturnValue 
+        {
+            ctrl_wakeup(true);
+            return true;
+        });
+
+    AddTool("self.wakeup.disable",
+        "Disable the wakeup function.",
+        PropertyList(),
+        [=](const PropertyList&) -> ReturnValue 
+        {
+            ctrl_wakeup(false);
+            return true;
+        });
+
+    AddTool("self.wakeup.get_status",
+        "Get the current status of the wakeup function.",
+        PropertyList(),
+        [=](const PropertyList&) -> ReturnValue 
+        {
+            return (bool)aec_enabled;
+        });
+
+    // 添加打断功能控制工具
+    AddTool("self.interrupt.enable",
+        "Enable the interrupt function.",
+        PropertyList(),
+        [=](const PropertyList&) -> ReturnValue 
+        {
+            ctrl_interrupt(true);
+            return true;
+        });
+
+    AddTool("self.interrupt.disable",
+        "Disable the interrupt function.",
+        PropertyList(),
+        [=](const PropertyList&) -> ReturnValue 
+        {
+            ctrl_interrupt(false);
+            return true;
+        });
+
+    AddTool("self.interrupt.get_status",
+        "Get the current status of the interrupt function.",
+        PropertyList(),
+        [=](const PropertyList&) -> ReturnValue 
+        {
+            // 注意：vad_enable为1表示不打断，为0表示可打断
+            return (bool)(!vad_enable);
+        });
 
 #endif 
     // Restore the original tools list to the end of the tools list
