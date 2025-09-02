@@ -188,7 +188,7 @@ uint8_t vad_enable = 1;      //0是支持打断，1是不支持打断
 #if defined (KWS_ENABLE_DEFAULT) && KWS_ENABLE_DEFAULT
 uint8_t aec_enabled = 1;
 #else
-uint8_t aec_enabled = 0;
+uint8_t aec_enabled = 1;
 #endif
 // xiaozhi2
 extern rt_mailbox_t g_button_event_mb;
@@ -1033,7 +1033,7 @@ rt_err_t xiaozhi_ui_obj_init()
     create_tip_label(cont, "不打断", 1, 0); //vad
     interrupt_switch = create_switch(cont, vad_switch_event_handler, 1, 2, 1);
     create_tip_label(cont, "唤醒", 2, 0); //aec
-    wakeup_switch = create_switch(cont, aec_switch_event_handler, 2, 2, 0);
+    wakeup_switch = create_switch(cont, aec_switch_event_handler, 2, 2, 1);
     create_tip_label(cont, "音量", 3, 0);
     volume_slider = create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
     create_tip_label(cont, "亮度", 4, 0);

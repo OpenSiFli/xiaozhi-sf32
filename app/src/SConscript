@@ -18,12 +18,13 @@ CPPDEFINES += ['MBEDTLS_PLATFORM_MEMORY']
 
 cwd     = GetCurrentDir()
 CPPPATH = [cwd]
-libpath = [cwd]
-CPPPATH += [cwd + '/et_config']
+libpath = [cwd + '/kws']
+CPPPATH += [cwd + '/kws']
 # Add source code
 src = Glob('*.c')
 src = src + Glob('./mcp/*.cc') 
-src = src + Glob('./iot/*.cc') 
+src = src + Glob('./iot/*.cc')  
+src = src + Glob('./kws/*.c') 
 #SrcRemove(src, 'xiaozhi.c')
 
 group = DefineGroup('Applications', src, depend = [''], CPPDEFINES = CPPDEFINES, 
