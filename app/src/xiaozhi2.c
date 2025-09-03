@@ -304,10 +304,10 @@ extern lv_obj_t *standby_screen;
 
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
-    rt_kprintf("in button handle\n");
+    rt_kprintf("in ws button handle\n");
     lv_display_trigger_activity(NULL);
     gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
-     rt_kprintf("in button handle2\n");
+     rt_kprintf("in ws button handle2\n");
     // 如果当前处于KWS模式，则退出KWS模式
         if (g_kws_running) 
         {  
@@ -356,11 +356,11 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
         }
     }
 }
-#if PKG_XIAOZHI_USING_AEC
+#ifndef XIAOZHI_USING_MQTT
 extern uint8_t Initiate_disconnection_flag;
 void simulate_button_pressed()
 {
-    rt_kprintf("simulate_button_pressed pressed\r\n");
+    rt_kprintf("ws simulate_button_pressed pressed\r\n");
     if(Initiate_disconnection_flag)//蓝牙主动断开不允许mic触发
     {
         rt_kprintf("Initiate_disconnection_flag\r\n");
@@ -370,7 +370,7 @@ void simulate_button_pressed()
 }
 void simulate_button_released()
 {
-    rt_kprintf("simulate_button_released released\r\n");
+    rt_kprintf("ws simulate_button_released released\r\n");
     if(Initiate_disconnection_flag)
     {
         return;
@@ -415,9 +415,10 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
     }
 }
 
-void xz_button_init(void) // Session key
+void xz_ws_button_init(void) // Session key
 {
     static int initialized = 0;
+    rt_kprintf("xz_ws_button_init\n");
     if (initialized == 0)
     {
         // 按键1（对话+唤醒）

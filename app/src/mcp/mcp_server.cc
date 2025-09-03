@@ -11,7 +11,9 @@
 #include "rgbled_mcp.h" 
 // #include "lwip/apps/websocket_client.h"   // 提供 wsock_write 和 OPCODE_TEXT 定义
 #include "../xiaozhi2.h"        // 提供 g_xz_ws 定义
-extern xiaozhi_ws_t g_xz_ws;   
+#include "../xiaozhi.h" 
+extern xiaozhi_ws_t g_xz_ws; 
+extern xiaozhi_context_t g_xz_context;     
 extern uint8_t aec_enabled;
 extern uint8_t vad_enable;
 extern "C" {
@@ -19,6 +21,7 @@ extern void xiaozhi_ui_update_volume(int volume);
 extern void xiaozhi_ui_update_brightness(int brightness);
 extern void ctrl_wakeup(bool is_wakeup);
 extern void ctrl_interrupt(bool is_interrupt);
+extern void my_mqtt_request_cb2(void *arg, err_t err);
 }
 
 
@@ -180,17 +183,51 @@ void McpServer::AddCommonTools() {
 
 void McpServer::SendText(const std::string& text)
 {
-    rt_kprintf("me send to websocket (MCP):\n");
+    rt_kprintf("[MCP] Sending text via MQTT:\n");
     rt_kprintf("[MCP] Current tools count: %d\n", tools_.size());
-    rt_kprintf("%s\n", text.c_str());  // 打印发送的内容
+    rt_kprintf("[MCP] Message content: %s\n", text.c_str());
+#ifdef XIAOZHI_USING_MQTT
+    //  MQTT 发送逻辑
+    if (mqtt_client_is_connected(&g_xz_context.clnt)) {
+        mqtt_publish(&g_xz_context.clnt, g_xz_context.publish_topic, text.c_str(), 
+                     text.length(), 0, 0, NULL, NULL);
+    } else {
+        rt_kprintf("[MCP] MQTT client not connected\n");
+    }
+#else
+    // WebSocket 发送逻辑
     wsock_write(&g_xz_ws.clnt, text.c_str(), text.length(), OPCODE_TEXT);
+#endif
+}
+void print_long_string(const char* str, int max_len_per_line = 100) {
+    int len = strlen(str);
+    for (int i = 0; i < len; i += max_len_per_line) {
+        char buffer[max_len_per_line + 1];
+        int copy_len = (len - i) < max_len_per_line ? (len - i) : max_len_per_line;
+        strncpy(buffer, str + i, copy_len);
+        buffer[copy_len] = '\0';
+        rt_kprintf("%s\n", buffer);
+    }
 }
 void McpServer::SendmcpMessage(const std::string& payload) {
-//    std::string message = "{\"session_id\":\"" + g_xz_ws.session_id + 
-//                          "\",\"type\":\"mcp\",\"payload\":" + payload + "}";
-   std::string message = "{\"session_id\":\"" + std::string(reinterpret_cast<const char*>(g_xz_ws.session_id)) +
+    std::string session_id;
+#ifdef XIAOZHI_USING_MQTT
+    session_id = std::string(reinterpret_cast<const char*>(g_xz_context.session_id));
+    rt_kprintf(" MQTT session_id: %s\n", session_id.c_str());
+#else
+    // WebSocket 逻辑
+    if (g_xz_ws.session_id[0]) {
+        session_id = std::string(reinterpret_cast<const char*>(g_xz_ws.session_id));
+    } else {
+        session_id = "unknown-session";
+    }
+    rt_kprintf("WebSocket session_id: %s\n", session_id.c_str());
+#endif
+
+    std::string message = "{\"session_id\":\"" + session_id +
                          "\",\"type\":\"mcp\",\"payload\":" + payload + "}";
-   McpServer::SendText(message);
+    print_long_string(message.c_str());
+    McpServer::SendText(message);
 }
 
 void McpServer::AddTool(McpTool* tool) {

@@ -32,8 +32,10 @@ extern void xiaozhi_ui_task(void *args);
 extern void xiaozhi(int argc, char **argv);
 extern void xiaozhi2(int argc, char **argv);
 extern void reconnect_xiaozhi();
-extern void xz_button_init(void);
+extern void xz_ws_button_init(void);
 extern void xz_ws_audio_init();
+extern void xz_mqtt_button_init(void);
+extern void xz_audio_init();
 extern rt_tick_t last_listen_tick;
 extern xiaozhi_ws_t g_xz_ws;
 extern rt_mailbox_t g_button_event_mb;
@@ -79,6 +81,7 @@ void HAL_MspInit(void)
 #define BT_APP_RECONNECT 10 // 重连
 #define UPDATE_REAL_WEATHER_AND_TIME 11
 #define PAN_TIMER_MS 3000
+#define MQTT_RECONNECT 12
 
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;
@@ -661,7 +664,10 @@ int main(void)
     xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
     iot_initialize(); // Initialize iot
     xiaozhi_time_weather_init();// Initialize time and weather
+#ifdef XIAOZHI_USING_MQTT
+#else
     xz_ws_audio_init(); // 初始化音频
+#endif
 
 #ifdef BSP_USING_BOARD_SF32LB52_LCHSPI_ULP
     unsigned int *addr2 = (unsigned int *)0x50003088; // 21
@@ -779,6 +785,7 @@ int main(void)
         else if (value == BT_APP_CONNECT_PAN_SUCCESS)
         {
             rt_kputs("BT_APP_CONNECT_PAN_SUCCESS\r\n");
+            
             //xiaozhi_ui_chat_output("初始化 请稍等...");
             xiaozhi_ui_standby_chat_output("初始化 请稍等...");
             xiaozhi_ui_update_ble("open");
@@ -793,10 +800,10 @@ int main(void)
             xiaozhi_ui_standby_chat_output("请按键连接小智...");
 
 #ifdef XIAOZHI_USING_MQTT
-            xiaozhi(0, NULL);
-            rt_kprintf("Select MQTT Version\n");
+            xiaozhi(0,NULL);
+            //xz_mqtt_button_init();
 #else
-            xz_button_init();
+            xz_ws_button_init();
             // xiaozhi2(0, NULL); // Start Xiaozhi
 #endif
             // 在蓝牙和PAN连接成功后创建睡眠定时器
@@ -818,9 +825,6 @@ int main(void)
         {
 
                         xiaozhi2(0,NULL); // 重连小智websocket
-        
-                
-
        } 
         else if(value == BT_APP_PHONE_DISCONNECTED)
         {

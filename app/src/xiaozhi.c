@@ -26,12 +26,13 @@
 #include <webclient.h>
 #include <cJSON.h>
 #include "bt_env.h"
-
+#include "./iot/iot_c_api.h"
+#include "./mcp/mcp_api.h"
 extern void xiaozhi_ui_update_ble(char *string);
 extern void xiaozhi_ui_chat_status(char *string);
 extern void xiaozhi_ui_chat_output(char *string);
 extern void xiaozhi_ui_update_emoji(char *string);
-
+extern void xiaozhi_ui_tts_output(char *string);
 xiaozhi_context_t g_xz_context;
 
 #ifdef XIAOZHI_USING_MQTT
@@ -42,6 +43,7 @@ static const char *hello_message =
     "{"
     "\"type\":\"hello\","
     "\"version\": 3,"
+    "\"features\":{\"mcp\":true},"
     "\"transport\":\"udp\","
     "\"audio_params\":{"
     "\"format\":\"opus\", \"sample_rate\":16000, \"channels\":1, "
@@ -50,7 +52,9 @@ static const char *hello_message =
 
 static const char *mode_str[] = {"auto", "manual", "realtime"};
 
-
+void my_mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t tot_len);
+void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
+                              u8_t flags);
 void my_mqtt_connection_cb(mqtt_client_t *client, void *arg,
                            mqtt_connection_status_t status)
 {
@@ -58,6 +62,8 @@ void my_mqtt_connection_cb(mqtt_client_t *client, void *arg,
     rt_kprintf("my_mqtt_connection_cb:%d\n", status);
     if (status == MQTT_CONNECT_ACCEPTED)
     {
+        mqtt_set_inpub_callback(&(ctx->clnt), my_mqtt_incoming_publish_cb,
+                                my_mqtt_incoming_data_cb, ctx);
         rt_sem_release(ctx->sem);
     }
     else
@@ -119,7 +125,7 @@ void my_mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t tot_len)
 
     topic_buf_pool->wr_idx = (topic_buf_pool->wr_idx + 1) & 1;
 }
-
+extern rt_tick_t last_listen_tick; 
 void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
                               u8_t flags)
 {
@@ -185,7 +191,13 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
         strncpy(ctx->session_id, session_id, 9);
         mqtt_g_state = kDeviceStateIdle;
         xz_audio_init();
+        bt_interface_exit_sniff_mode(
+        (unsigned char *)&g_bt_app_env.bd_addr); // exit sniff mode
+        bt_interface_wr_link_policy_setting(
+        (unsigned char *)&g_bt_app_env.bd_addr,
+        BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // close role switch
 
+        mqtt_listen_start(&g_xz_context, kListeningModeAlwaysOn);
         xiaozhi_ui_chat_output("小智 已连接!");
         xiaozhi_ui_update_ble("open");
         xiaozhi_ui_chat_status("待命中...");
@@ -209,6 +221,7 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
             {
                 mqtt_g_state = kDeviceStateSpeaking;
                 xz_speaker(1);
+                xiaozhi_ui_chat_status("讲话中...");
             }
         }
         else if (strcmp(state, "stop") == 0)
@@ -216,13 +229,22 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
 
             mqtt_g_state = kDeviceStateIdle;
             xz_speaker(0);
+            xiaozhi_ui_chat_status("待命中...");
         }
         else if (strcmp(state, "sentence_start") == 0)
         {
-            rt_kputs(cJSON_GetObjectItem(root, "text")->valuestring);
-            xiaozhi_ui_chat_output(
-                cJSON_GetObjectItem(root, "text")->valuestring);
+            char *txt = cJSON_GetObjectItem(root, "text")->valuestring;
+            // rt_kputs(txt);
+            xiaozhi_ui_tts_output(txt); // 使用专用函数处理 tts 输出
         }
+    }
+    else if (strcmp(type, "stt") == 0)
+    {
+        char *txt = cJSON_GetObjectItem(root, "text")->valuestring;
+        xiaozhi_ui_chat_output(txt);
+        last_listen_tick = rt_tick_get();
+        mqtt_g_state = kDeviceStateSpeaking;
+        xz_speaker(1);
     }
     else if (strcmp(type, "llm") ==
              0) // {"type":"llm", "text": "😊", "emotion": "smile"}
@@ -230,6 +252,15 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
         rt_kputs(cJSON_GetObjectItem(root, "emotion")->valuestring);
         xiaozhi_ui_update_emoji(
             cJSON_GetObjectItem(root, "emotion")->valuestring);
+    }
+    else if (strcmp(type, "mcp") == 0)
+    {
+        rt_kprintf("mcp command\n");
+        cJSON *payload = cJSON_GetObjectItem(root, "payload");
+        if (payload && cJSON_IsObject(payload))
+        {
+            McpServer_ParseMessage(cJSON_PrintUnformatted(payload));
+        }
     }
     else
     {
@@ -248,8 +279,7 @@ void mqtt_hello(xiaozhi_context_t *ctx)
     LOCK_TCPIP_CORE();
     if (mqtt_client_is_connected(&(ctx->clnt)))
     {
-        mqtt_set_inpub_callback(&(ctx->clnt), my_mqtt_incoming_publish_cb,
-                                my_mqtt_incoming_data_cb, ctx);
+        
         mqtt_publish(&(ctx->clnt), ctx->publish_topic, hello_message,
                      strlen(hello_message), 0, 0, my_mqtt_request_cb, ctx);
     }
