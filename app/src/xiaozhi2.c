@@ -37,28 +37,25 @@
     #include "gui_app_pm.h"
 #endif // BSP_USING_PM
 #include "xiaozhi_public.h"
-#define MAX_WSOCK_HDR_LEN 4096
-extern void xiaozhi_ui_update_ble(char *string);
-extern void xiaozhi_ui_chat_status(char *string);
-extern void xiaozhi_ui_chat_output(char *string);
-extern void xiaozhi_ui_update_emoji(char *string);
-extern void xiaozhi_ui_tts_output(char *string);
-extern void xiaozhi_ui_standby_chat_output(char *string);
-extern void ui_swith_to_xiaozhi_screen(void);
-extern void ui_swith_to_standby_screen(void);
-extern void xiaozhi_ui_update_standby_emoji(char *string);
-#define WEBSOC_RECONNECT 4
-// IoT 模块相关
-extern void iot_initialize();                              // 初始化 IoT 模块
-extern void iot_invoke(const uint8_t *data, uint16_t len); // 执行远程命令
-extern const char *iot_get_descriptors_json();             // 获取设备描述
-extern const char *iot_get_states_json();                  // 获取设备状态
+#include "xiaozhi_ui.h"
+#include "xiaozhi_audio.h"
 
-extern void xz_mic_open(xz_audio_t *thiz);
+#define MAX_WSOCK_HDR_LEN 4096
+#define WEBSOC_RECONNECT 4
+
+extern BOOL g_pan_connected;
+extern xz_audio_t *thiz;
+extern rt_mailbox_t g_bt_app_mb;
+extern lv_obj_t *main_container;
+extern lv_obj_t *standby_screen;
+extern uint8_t Initiate_disconnection_flag;
+extern rt_mailbox_t g_ui_task_mb;
+extern rt_tick_t last_listen_tick;
+extern void pan_reconnect();
+
 
 xiaozhi_ws_t g_xz_ws;
 rt_mailbox_t g_button_event_mb;
-
 enum DeviceState web_g_state;
 
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
@@ -68,11 +65,7 @@ L2_RET_BSS_SECT_END
 #else
 static char message[256] L2_RET_BSS_SECT(message);
 #endif
-
-extern BOOL g_pan_connected;
-extern xz_audio_t *thiz;
 static const char *mode_str[] = {"auto", "manual", "realtime"};
-
 static const char *hello_message =
     "{"
     "\"type\":\"hello\","
@@ -85,6 +78,12 @@ static const char *hello_message =
     "\"format\":\"opus\", \"sample_rate\":16000, \"channels\":1, "
     "\"frame_duration\":60"
     "}}";
+
+// 倒计时动画
+static lv_obj_t *countdown_screen = NULL;
+static rt_thread_t countdown_thread = RT_NULL;
+static bool  g_ota_verified = false;
+
 
 typedef struct
 {
@@ -101,6 +100,7 @@ typedef struct
 
 static activation_context_t g_activation_context;
 static websocket_context_t g_websocket_context;
+
 
 void parse_helLo(const u8_t *data, u16_t len);
 
@@ -298,10 +298,6 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
 }
 void xiaozhi2(int argc, char **argv);
 
-extern rt_mailbox_t g_bt_app_mb;
-extern lv_obj_t *main_container;
-extern lv_obj_t *standby_screen;
-
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
     rt_kprintf("in ws button handle\n");
@@ -357,7 +353,6 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
     }
 }
 #ifndef XIAOZHI_USING_MQTT
-extern uint8_t Initiate_disconnection_flag;
 void simulate_button_pressed()
 {
     rt_kprintf("ws simulate_button_pressed pressed\r\n");
@@ -379,10 +374,7 @@ void simulate_button_released()
 }
 #endif
 
-// 倒计时动画
-static lv_obj_t *countdown_screen = NULL;
-static rt_thread_t countdown_thread = RT_NULL;
-extern rt_mailbox_t g_ui_task_mb;
+
 static void xz_button2_event_handler(int32_t pin, button_action_t action)
 {
     if (action == BUTTON_PRESSED)
@@ -430,7 +422,15 @@ void xz_ws_button_init(void) // Session key
         int32_t id1 = button_init(&cfg1);
         RT_ASSERT(id1 >= 0);
         RT_ASSERT(SF_EOK == button_enable(id1));
-
+        initialized = 1;
+    }
+}
+void xz_ws_button_init2(void)
+{
+    static int initialized = 0;
+    rt_kprintf("xz_ws_button2_init\n");
+    if (initialized == 0)
+    {
         // 按键2（关机）
         button_cfg_t cfg2;
         cfg2.pin = BSP_KEY2_PIN;
@@ -450,7 +450,6 @@ void xz_ws_audio_init()
     xz_audio_decoder_encoder_open(1); // 打开音频解码器和编码器
 
 }
-extern rt_tick_t last_listen_tick;
 void parse_helLo(const u8_t *data, u16_t len)
 {
     cJSON *item = NULL;
@@ -771,9 +770,7 @@ static void parse_ota_response(const char *response,
 
     cJSON_Delete(root);
 }
-extern void pan_reconnect();
 
-static bool  g_ota_verified = false;
 void xiaozhi2(int argc, char **argv)
 {
     g_activation_context.sem =

@@ -28,11 +28,9 @@
 #include "bt_env.h"
 #include "./iot/iot_c_api.h"
 #include "./mcp/mcp_api.h"
-extern void xiaozhi_ui_update_ble(char *string);
-extern void xiaozhi_ui_chat_status(char *string);
-extern void xiaozhi_ui_chat_output(char *string);
-extern void xiaozhi_ui_update_emoji(char *string);
-extern void xiaozhi_ui_tts_output(char *string);
+#include "xiaozhi_ui.h"
+
+
 xiaozhi_context_t g_xz_context;
 
 #ifdef XIAOZHI_USING_MQTT
@@ -246,12 +244,10 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
         mqtt_g_state = kDeviceStateSpeaking;
         xz_speaker(1);
     }
-    else if (strcmp(type, "llm") ==
-             0) // {"type":"llm", "text": "😊", "emotion": "smile"}
+    else if (strcmp(type, "llm") ==0) // {"type":"llm", "text": "😊", "emotion": "smile"}
     {
         rt_kputs(cJSON_GetObjectItem(root, "emotion")->valuestring);
-        xiaozhi_ui_update_emoji(
-            cJSON_GetObjectItem(root, "emotion")->valuestring);
+        xiaozhi_ui_update_emoji(cJSON_GetObjectItem(root, "emotion")->valuestring);
     }
     else if (strcmp(type, "mcp") == 0)
     {

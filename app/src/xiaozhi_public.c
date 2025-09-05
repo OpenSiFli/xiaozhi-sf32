@@ -28,6 +28,7 @@
 #include "bf0_sys_cfg.h"
 #include "drv_flash.h"
 #include "gui_app_pm.h"
+#include "../board/board_hardware.h"
 static const char *ota_version =
     "{\r\n "
     "\"version\": 2,\r\n"
@@ -69,6 +70,9 @@ static const char *ota_version =
     "}\r\n";
 
 // 公共变量定义
+extern uint8_t aec_enabled;
+extern BOOL first_pan_connected;
+
 static uint8_t g_en_vad = 1;
 static uint8_t g_en_aec = 1;
 static uint8_t g_config_change = 0;
@@ -76,40 +80,10 @@ static uint8_t g_config_change = 0;
 volatile int g_kws_force_exit = 0;
 volatile int g_kws_running = 0;
 volatile uint8_t she_bei_ma = 1;
-
 char mac_address_string[20];
 char client_id_string[40];
 ALIGN(4) uint8_t g_sha256_result[32] = {0};
-extern uint8_t aec_enabled;
-HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
-{
-    rt_kprintf("PowerDownCustom\n");
-#ifdef BSP_USING_BOARD_SF32LB52_LCD_N16R8
-    BSP_LCD_PowerDown();
-    HAL_PMU_SelectWakeupPin(0, HAL_HPAON_QueryWakeupPin(hwp_gpio1, BSP_KEY1_PIN)); //select PA34 to wake_pin0
-    HAL_PMU_EnablePinWakeup(0, AON_PIN_MODE_HIGH);  //enable wake_pin0
-    hwp_pmuc->WKUP_CNT = 0x50005;    //31-16bit:config PIN1 wake CNT , 15-0bit:PIN0 wake CNT
-#else
-    HAL_PMU_SelectWakeupPin(0, 19); // PA43
-    HAL_PMU_EnablePinWakeup(0, 0);
-#endif
-    HAL_PIN_Set(PAD_PA24, GPIO_A24, PIN_PULLDOWN, 1);
-    for (uint32_t i = PAD_PA28; i <= PAD_PA44; i++)
-    {
-        HAL_PIN_Set(i, i - PAD_PA28 + GPIO_A28, PIN_PULLDOWN, 1);
-    }
-    hwp_pmuc->PERI_LDO &=  ~(PMUC_PERI_LDO_EN_LDO18 | PMUC_PERI_LDO_EN_VDD33_LDO2 | PMUC_PERI_LDO_EN_VDD33_LDO3);
-    hwp_pmuc->WKUP_CNT = 0x000F000F;
 
-    
-
-    rt_hw_interrupt_disable();
-    rt_kprintf("PowerDownCustom2\n");
-    HAL_PMU_ConfigPeriLdo(PMUC_PERI_LDO_EN_VDD33_LDO2_Pos, false, false);
-    HAL_PMU_ConfigPeriLdo(PMU_PERI_LDO_1V8, false, false);
-    HAL_PMU_EnterHibernate();
-    rt_kprintf("PowerDownCustom3\n");
-}
 ble_common_update_type_t ble_request_public_address(bd_addr_t *addr)
 {
     uint8_t mac[6] = {0};
@@ -233,7 +207,7 @@ int check_internet_access()
 
     return r;
 }
-extern BOOL first_pan_connected;
+
 char *get_xiaozhi()
 {
     rt_kprintf("gett_xiaozhi\n");
@@ -400,225 +374,12 @@ void xz_set_config_update(uint8_t en)
 }
 
 
-enum ListeningMode xz_get_mode(void)
-{
-    return aec_is_enable() ? kListeningModeAlwaysOn : kListeningModeManualStop;
-}
-
-
-void xz_set_lcd_brightness(uint16_t level)
-{
-    rt_device_t bl_device = rt_device_find("lcd");
-    RT_ASSERT(bl_device);
-
-    int ret = rt_device_open(bl_device, RT_DEVICE_OFLAG_RDWR);
-    if (ret == RT_EOK || ret == -RT_EBUSY)
-    {
-        rt_device_control(bl_device, RTGRAPHIC_CTRL_SET_BRIGHTNESS, &level);
-    }
-    if (bl_device != NULL && ret == RT_EOK)
-        rt_device_close(bl_device);
-}
-extern const unsigned char xiaozhi_font[];
-extern const int xiaozhi_font_size;
 
 
 
-static lv_obj_t *sleep_label = NULL;
-static int sleep_countdown = 3;
-static lv_timer_t *sleep_timer = NULL;
-static volatile int g_sleep_countdown_active = 0; // 休眠倒计时标志
 
-extern rt_timer_t update_time_ui_timer;
-extern rt_timer_t update_weather_ui_timer;
-lv_obj_t *sleep_screen = NULL;
-static void sleep_countdown_cb(lv_timer_t *timer)
-{
-    
-    if (sleep_label && sleep_countdown > 0)
-    {
-        char num[2] = {0};
-        snprintf(num, sizeof(num), "%d", sleep_countdown);
-        lv_label_set_text(sleep_label, num);
-        lv_obj_center(sleep_label);
-        sleep_countdown--;
-    }
-    else
-    {
-        // 清理所有LVGL对象
-        if (sleep_label) {
-            lv_obj_delete(sleep_label);
-            sleep_label = NULL;
-        }
-                if(update_time_ui_timer)
-        {
-            rt_timer_stop(update_time_ui_timer);//睡眠停止ui更新
-        }
-        
-        if(update_weather_ui_timer)
-        {
-            rt_timer_stop(update_weather_ui_timer);
-        }
 
-        lv_timer_delete(sleep_timer);
-        sleep_timer = NULL;
-        g_sleep_countdown_active = 0; // 倒计时结束，清除标志
-        rt_kprintf("sleep countdown ok\n");  
-        if(aec_enabled)
-        {
-            rt_pm_request(PM_SLEEP_MODE_IDLE);
-        }
-        else
-        {
-           rt_pm_release(PM_SLEEP_MODE_IDLE);
-        }
-        lv_obj_clean(sleep_screen);
-        rt_thread_delay(100);
-        gui_pm_fsm(GUI_PM_ACTION_SLEEP);
-    }
-}
 
-void show_sleep_countdown_and_sleep(void)
-{
-    if (g_sleep_countdown_active) return; // 已经在倒计时，直接返回
-    g_sleep_countdown_active = 1;         // 设置标志
 
-    static lv_font_t *g_tip_font = NULL;
-    static lv_font_t *g_big_font = NULL;
-    
-    const int tip_font_size = 36;
-    const int big_font_size = 120;
 
-    if (!g_tip_font)
-        g_tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
-    if (!g_big_font)
-        g_big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, big_font_size);
 
-    if (!sleep_screen) {
-        sleep_screen = lv_obj_create(NULL);
-        lv_obj_set_style_bg_color(sleep_screen, lv_color_hex(0x000000), 0);
-    }
-    lv_obj_clean(sleep_screen);
-    lv_screen_load(sleep_screen);
-
-    // 顶部“即将休眠”label
-    static lv_style_t style_tip_sleep;
-    lv_style_init(&style_tip_sleep);
-    lv_style_set_text_font(&style_tip_sleep, g_tip_font);
-    lv_style_set_text_color(&style_tip_sleep, lv_color_hex(0xFFFFFF));
-    lv_obj_t *tip_label = lv_label_create(sleep_screen);
-    lv_label_set_text(tip_label, "即将休眠");
-    lv_obj_add_style(tip_label, &style_tip_sleep, 0);
-    lv_obj_align(tip_label, LV_ALIGN_TOP_MID, 0, 20);
-
-    // 中间倒计时数字
-    static lv_style_t style_big_sleep;
-    lv_style_init(&style_big_sleep);
-    lv_style_set_text_font(&style_big_sleep, g_big_font);
-    lv_style_set_text_color(&style_big_sleep, lv_color_hex(0xFFFFFF));
-    sleep_label = lv_label_create(sleep_screen);
-    lv_obj_add_style(sleep_label, &style_big_sleep, 0);
-    lv_obj_center(sleep_label);
-    lv_label_set_text(sleep_label, "3"); 
-
-    sleep_countdown = 3;
-    if (sleep_timer)
-        lv_timer_delete(sleep_timer);
-    sleep_timer = lv_timer_create(sleep_countdown_cb, 1000, NULL);
-
-    // 立即显示第一个数字
-    sleep_countdown_cb(sleep_timer);
-}
-
-// 在 xiaozhi_public.c 中添加关机倒计时函数
-static lv_obj_t *shutdown_label = NULL;
-static int shutdown_countdown = 3;
-static lv_timer_t *shutdown_timer = NULL;
-static volatile int g_shutdown_countdown_active = 0; // 关机倒计时标志
-lv_obj_t *shutdown_screen = NULL;
-uint8_t i = 0;
-static void shutdown_countdown_cb(lv_timer_t *timer)
-{
-    if(i == 1)
-    {
-        lv_timer_delete(shutdown_timer);
-        shutdown_timer = NULL;
-        // 执行关机
-        PowerDownCustom();
-        rt_kprintf("bu gai chu xian\n");  
-    }
-    if (shutdown_label && shutdown_countdown > 0)
-    {
-        char num[2] = {0};
-        snprintf(num, sizeof(num), "%d", shutdown_countdown);
-        lv_label_set_text(shutdown_label, num);
-        lv_obj_center(shutdown_label);
-        shutdown_countdown--;
-    }
-    else
-    {
-        // 清理所有LVGL对象
-        if (shutdown_label) {
-            lv_obj_delete(shutdown_label);
-            shutdown_label = NULL;
-        }
-        
-        g_shutdown_countdown_active = 0; // 倒计时结束，清除标志
-        rt_kprintf("shutdown countdown ok\n");
-        lv_obj_clean(shutdown_screen);
-        rt_thread_delay(200);
-        i = 1;
-    }
-
-}
-
-void show_shutdown(void)
-{
-    if (g_shutdown_countdown_active) return; // 已经在倒计时，直接返回
-    g_shutdown_countdown_active = 1;         // 设置标志
-
-    static lv_font_t *g_tip_font = NULL;
-    static lv_font_t *g_big_font = NULL;
-    const int tip_font_size = 36;
-    const int big_font_size = 120;
-
-    if (!g_tip_font)
-        g_tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
-    if (!g_big_font)
-        g_big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, big_font_size);
-
-    if (!shutdown_screen) {
-        shutdown_screen = lv_obj_create(NULL);
-        lv_obj_set_style_bg_color(shutdown_screen, lv_color_hex(0x000000), 0);
-    }
-    lv_obj_clean(shutdown_screen);
-    lv_screen_load(shutdown_screen);
-
-    // 顶部"准备关机"label
-    static lv_style_t style_tip_shutdown;
-    lv_style_init(&style_tip_shutdown);
-    lv_style_set_text_font(&style_tip_shutdown, g_tip_font);
-    lv_style_set_text_color(&style_tip_shutdown, lv_color_hex(0xFFFFFF));
-    lv_obj_t *tip_label = lv_label_create(shutdown_screen);
-    lv_label_set_text(tip_label, "准备关机");
-    lv_obj_add_style(tip_label, &style_tip_shutdown, 0);
-    lv_obj_align(tip_label, LV_ALIGN_TOP_MID, 0, 20);
-
-    // 中间倒计时数字
-    static lv_style_t style_big_shutdown;
-    lv_style_init(&style_big_shutdown);
-    lv_style_set_text_font(&style_big_shutdown, g_big_font);
-    lv_style_set_text_color(&style_big_shutdown, lv_color_hex(0xFFFFFF));
-    shutdown_label = lv_label_create(shutdown_screen);
-    lv_obj_add_style(shutdown_label, &style_big_shutdown, 0);
-    lv_obj_center(shutdown_label);
-    lv_label_set_text(shutdown_label, "3"); 
-
-    shutdown_countdown = 3;
-    if (shutdown_timer)
-        lv_timer_delete(shutdown_timer);
-    shutdown_timer = lv_timer_create(shutdown_countdown_cb, 1000, NULL);
-
-    // 立即显示第一个数字
-    shutdown_countdown_cb(shutdown_timer);
-}

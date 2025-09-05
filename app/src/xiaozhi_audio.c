@@ -21,7 +21,6 @@
 #include "audio_server.h"
 #include "drv_audprc.h"
 #include "mem_section.h"
-
 #ifdef PKG_XIAOZHI_USING_AEC
     #include "webrtc/common_audio/vad/include/webrtc_vad.h"
     #include "sifli_resample.h"
@@ -37,12 +36,15 @@
 #include "xiaozhi_weather.h"
 #include "gui_app_pm.h"
 #include "lv_display.h"
+#include "xiaozhi_ui.h"
+#include "xiaozhi2.h"
+#include "xiaozhi_audio.h"
+#include "log.h"
+
 #undef LOG_TAG
 #define LOG_TAG "xz"
 #define DBG_TAG "xz"
 #define DBG_LVL LOG_LVL_INFO
-#include "log.h"
-
 #define XZ_THREAD_NAME "xiaozhi"
 #define XZ_OPUS_STACK_SIZE (32 * 1024)
 #define XZ_EVENT_MIC_RX (1 << 0)
@@ -69,9 +71,15 @@
     #define XZ_DEVICE_STATE web_g_state
 #endif
 
+extern rt_mailbox_t g_bt_app_mb;
+extern uint8_t vad_enable;
+extern uint8_t Initiate_disconnection_flag;
+extern lv_obj_t *main_container;
+extern lv_obj_t *standby_screen;
+
 struct udp_pcb *udp_pcb;
 xz_audio_t xz_audio;
-extern rt_mailbox_t g_bt_app_mb;
+bool g_ota_verified = true;
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
 L2_RET_BSS_SECT_BEGIN(g_xz_opus_stack) //6000地址
 static uint32_t g_xz_opus_stack[XZ_OPUS_STACK_SIZE / sizeof(uint32_t)];
@@ -82,17 +90,13 @@ static uint32_t
 #endif
 
 static void xz_opus_thread_entry(void *p);
-void xz_speaker_open(xz_audio_t *thiz);
-void xz_speaker_close(xz_audio_t *thiz);
+static void audio_write_and_wait(xz_audio_t *thiz, uint8_t *data, uint32_t data_len);
+static void xz_button_event_handler(int32_t pin, button_action_t action);
 void xz_mic_open(xz_audio_t *thiz);
 void xz_mic_close(xz_audio_t *thiz);
-static void audio_write_and_wait(xz_audio_t *thiz, uint8_t *data,
-                                 uint32_t data_len);
-extern void ui_swith_to_xiaozhi_screen(void);     
-extern void xiaozhi_ui_chat_status(char *string);
-extern void xz_audio_send_using_websocket(uint8_t *data,
-                                          int len); // 发送音频数据
-extern uint8_t vad_enable;
+void xz_speaker_close(xz_audio_t *thiz);
+void xz_speaker_open(xz_audio_t *thiz);
+
 void xz_audio_send(uint8_t *data, int len)
 {
     uint32_t nonce[4];
@@ -170,9 +174,8 @@ void xz_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
         rt_kprintf("invalid udp\n");
     }
 }
-static void xz_button_event_handler(int32_t pin, button_action_t action);
-#ifdef XIAOZHI_USING_MQTT
-extern uint8_t Initiate_disconnection_flag;
+
+#ifdef XIAOZHI_USING_MQT
 void simulate_button_pressed()
 {
      rt_kprintf("mqtt simulate_button_pressed pressed\r\n");
@@ -359,9 +362,6 @@ void xz_speaker(int on)
         xz_speaker_close(thiz);
     }
 }
-bool g_ota_verified = true;
-extern lv_obj_t *main_container;
-extern lv_obj_t *standby_screen;
 
 #ifdef XIAOZHI_USING_MQTT
 static void xz_button_event_handler(int32_t pin, button_action_t action)

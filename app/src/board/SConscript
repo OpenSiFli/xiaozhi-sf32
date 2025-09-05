@@ -1,0 +1,20 @@
+from building import *
+
+cwd = GetCurrentDir()
+
+src = []
+path = []
+
+if GetDepend(['BSP_USING_BOARD_SF32LB52_XTY_AI']):
+    src += Glob('sf32lb52-xty-ai.cc')
+elif GetDepend(['BSP_USING_BOARD_SF32LB52_LCHSPI_ULP']):
+    src += Glob('sf32lb52-lchspi-ulp.cc')
+elif GetDepend(['BSP_USING_BOARD_SF32LB52_NANO_52J']):
+    src += Glob('sf32lb52-nano_52j.cc')
+elif GetDepend(['BSP_USING_BOARD_SF32LB52_LCD_N16R8']):
+    src += Glob('sf32lb52-lcd_n16r8.cc')
+elif GetDepend(['BSP_USING_BOARD_SF32LB52_XTY_AI_THT']):
+    src += Glob('sf32lb52-xty-ai_tht.cc')
+group = DefineGroup('board', src, depend = [], CPPPATH = path)
+
+Return('group')

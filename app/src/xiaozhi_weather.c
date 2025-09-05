@@ -16,6 +16,8 @@
 #include "ntp.h"
 #include "xiaozhi_weather.h"
 #include "littlevgl2rtt.h"
+#include <stdlib.h>
+#include <stdio.h>
 #include "lv_image_dsc.h"
 
 static volatile int g_weather_sync_in_progress = 0;  // 天气同步进行标志
@@ -838,7 +840,6 @@ int xiaozhi_ntp_sync(void)
         rt_kprintf("Trying NTP server: %s\n", ntp_servers[i]);
 
 #ifdef PKG_USING_NETUTILS
-        extern time_t ntp_sync_to_rtc(const char *host_name);
         // 获取服务时间并设置rtc时间
         cur_time = ntp_sync_to_rtc(ntp_servers[i]);
         if (cur_time > 1000000000)// 基本的时间有效性检查（大约是2001年之后）

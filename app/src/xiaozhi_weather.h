@@ -1,7 +1,8 @@
 #ifndef XIAOZHI_WEATHER_H
 #define XIAOZHI_WEATHER_H
 #include "time.h"
-
+#include <stdlib.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {

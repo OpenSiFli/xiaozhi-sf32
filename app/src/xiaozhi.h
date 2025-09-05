@@ -1,5 +1,5 @@
 #ifndef XIAOZHI_H
-    #define XIAOZHI_H
+#define XIAOZHI_H
 
     #define GET_HEADER_BUFSZ 1024             // 头部大小
     #define GET_RESP_BUFSZ 1024               // 响应缓冲区大小
@@ -89,6 +89,7 @@ void mqtt_listen_stop(xiaozhi_context_t *ctx);
 void mqtt_speak_abort(xiaozhi_context_t *ctx, int reason);
 void mqtt_wake_word_detected(xiaozhi_context_t *ctx, char *wakeword);
 void mqtt_iot_descriptor(xiaozhi_context_t *ctx, char *descriptors);
+void xiaozhi(int argc, char **argv);
 
 char *get_mac_address(void);
 void xz_audio_init(void);
@@ -103,5 +104,6 @@ void xz_audio_decoder_encoder_close(void);
 void xz_audio_downlink(uint8_t *data, uint32_t size, uint32_t *aes_value,
                        uint8_t need_aes);
 void xz_audio_send_using_websocket(uint8_t *data, int len);
+void xz_set_lcd_brightness(uint16_t level);
 #endif
 /************************ (C) COPYRIGHT Sifli Technology *******END OF FILE****/

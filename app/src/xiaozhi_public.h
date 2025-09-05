@@ -58,18 +58,11 @@
 #define KEY2_ACTIVE_LEVEL 0
 #endif
 
-// 可复用函数
-char *get_mac_address(void);
-void hash_run(uint8_t algo, uint8_t *raw_data, uint32_t raw_data_len,
-              uint8_t *result, uint32_t result_len);
-void hex_2_asc(uint8_t n, char *str);
-char *get_client_id();
-int check_internet_access();
-char *get_xiaozhi();
-char *my_json_string(cJSON *json, char *key);
 extern volatile int g_kws_force_exit;
 extern volatile int g_kws_running;
 extern volatile uint8_t she_bei_ma;
+
+
 typedef struct
 {
     rt_slist_t node;
@@ -110,20 +103,22 @@ typedef struct
     bool vad_enabled;
 } xz_audio_t;
 
-
-
+// 可复用函数
+char *get_mac_address(void);
+void hash_run(uint8_t algo, uint8_t *raw_data, uint32_t raw_data_len,uint8_t *result, uint32_t result_len);
+void hex_2_asc(uint8_t n, char *str);
+char *get_client_id();
+int check_internet_access();
+char *get_xiaozhi();
+char *my_json_string(cJSON *json, char *key);
 void xz_aec_mic_close(xz_audio_t *thiz);
 void xz_aec_mic_open(xz_audio_t *thiz);
-
 uint8_t vad_is_enable(void);
 void vad_set_enable(uint8_t enable);
 uint8_t aec_is_enable(void);
 void aec_set_enable(uint8_t enable);
-enum ListeningMode xz_get_mode(void);
 uint8_t xz_get_config_update(void);
 void xz_set_config_update(uint8_t en);
-void xz_set_lcd_brightness(uint16_t level);
-void PowerDownCustom(void);
-void show_sleep_countdown_and_sleep(void);
 ble_common_update_type_t ble_request_public_address(bd_addr_t *addr);
+
 #endif // XIAOZHI_PUBLIC_H

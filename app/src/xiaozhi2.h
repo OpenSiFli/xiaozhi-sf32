@@ -18,6 +18,15 @@ extern "C"
 #include <cJSON.h>
 #include "button.h"
 #include "audio_server.h"
+
+void xiaozhi2(int argc, char **argv);
+void xz_ws_button_init(void); // 对话键
+void xz_ws_button_init2(void);//关机键
+void xz_ws_audio_init(void);
+void xz_audio_send_using_websocket(uint8_t *data, int len); // 发送音频数据
+void ws_send_speak_abort(void *ws, char *session_id, int reason);
+void ws_send_listen_start(void *ws, char *session_id,enum ListeningMode mode);
+void ws_send_listen_stop(void *ws, char *session_id);
     /**
      * @brief xiaozhi websocket cntext 数据结构体
      */
