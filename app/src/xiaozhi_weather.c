@@ -816,10 +816,6 @@ int xiaozhi_ntp_sync(void)
     // 设置同步进行标志
     g_ntp_sync_in_progress = 1;
 
-    // 确保时区设置在同步时也生效
-    setenv("TZ", "Asia/Shanghai", 1);
-    tzset();
-
     if (!g_pan_connected)
     {
         LOG_W("PAN not connected, cannot sync time");
