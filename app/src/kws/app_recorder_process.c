@@ -5,7 +5,9 @@
 #include "bsp_et_asr_ctrl.h"
 #include "lib_et_asr.h"
 #include "xiaozhi_public.h"
+
 #include "app_recorder_process.h"
+
 
 #define DBG_TAG           "kws"
 #define DBG_LVL           AUDIO_DBG_LVL

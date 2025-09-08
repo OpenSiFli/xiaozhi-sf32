@@ -30,6 +30,7 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "ulog.h"
+
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -65,6 +66,7 @@ extern lv_obj_t *standby_screen;
 extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
+
 
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;

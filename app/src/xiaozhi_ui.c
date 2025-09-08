@@ -288,12 +288,12 @@ void show_sleep_countdown_and_sleep(void)
     if (g_sleep_countdown_active) return; // 已经在倒计时，直接返回
     g_sleep_countdown_active = 1;         // 设置标志
 
+
     static lv_font_t *g_tip_font = NULL;
     static lv_font_t *g_big_font = NULL;
     
     const int tip_font_size = 36;
     const int big_font_size = 120;
-
     if (!g_tip_font)
         g_tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
     if (!g_big_font)

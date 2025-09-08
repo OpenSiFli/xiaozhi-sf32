@@ -26,6 +26,7 @@ src = src + Glob('./mcp/*.cc')
 src = src + Glob('./iot/*.cc')  
 src = src + Glob('./kws/*.c') 
 #src = src + Glob('./board/*.cc') 
+
 #SrcRemove(src, 'xiaozhi.c')
 
 group = DefineGroup('Applications', src, depend = [''], CPPDEFINES = CPPDEFINES, 

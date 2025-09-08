@@ -40,7 +40,6 @@
 #include "xiaozhi2.h"
 #include "xiaozhi_audio.h"
 #include "log.h"
-
 #undef LOG_TAG
 #define LOG_TAG "xz"
 #define DBG_TAG "xz"
@@ -80,6 +79,7 @@ extern lv_obj_t *standby_screen;
 struct udp_pcb *udp_pcb;
 xz_audio_t xz_audio;
 bool g_ota_verified = true;
+
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
 L2_RET_BSS_SECT_BEGIN(g_xz_opus_stack) //6000地址
 static uint32_t g_xz_opus_stack[XZ_OPUS_STACK_SIZE / sizeof(uint32_t)];
@@ -174,6 +174,7 @@ void xz_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
         rt_kprintf("invalid udp\n");
     }
 }
+
 
 #ifdef XIAOZHI_USING_MQT
 void simulate_button_pressed()
@@ -362,6 +363,9 @@ void xz_speaker(int on)
         xz_speaker_close(thiz);
     }
 }
+bool g_ota_verified = true;
+extern lv_obj_t *main_container;
+extern lv_obj_t *standby_screen;
 
 #ifdef XIAOZHI_USING_MQTT
 static void xz_button_event_handler(int32_t pin, button_action_t action)
