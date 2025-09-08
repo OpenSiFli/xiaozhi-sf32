@@ -361,9 +361,6 @@ void xz_speaker(int on)
         xz_speaker_close(thiz);
     }
 }
-bool g_ota_verified = true;
-extern lv_obj_t *main_container;
-extern lv_obj_t *standby_screen;
 
 #ifdef XIAOZHI_USING_MQTT
 static void xz_button_event_handler(int32_t pin, button_action_t action)
