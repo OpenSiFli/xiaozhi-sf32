@@ -31,6 +31,7 @@
 #include "xiaozhi_ui.h"
 
 
+
 xiaozhi_context_t g_xz_context;
 
 #ifdef XIAOZHI_USING_MQTT
@@ -245,9 +246,19 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
         xz_speaker(1);
     }
     else if (strcmp(type, "llm") ==0) // {"type":"llm", "text": "😊", "emotion": "smile"}
+
     {
         rt_kputs(cJSON_GetObjectItem(root, "emotion")->valuestring);
         xiaozhi_ui_update_emoji(cJSON_GetObjectItem(root, "emotion")->valuestring);
+    }
+    else if (strcmp(type, "mcp") == 0)
+    {
+        rt_kprintf("mcp command\n");
+        cJSON *payload = cJSON_GetObjectItem(root, "payload");
+        if (payload && cJSON_IsObject(payload))
+        {
+            McpServer_ParseMessage(cJSON_PrintUnformatted(payload));
+        }
     }
     else if (strcmp(type, "mcp") == 0)
     {

@@ -286,6 +286,7 @@ void show_sleep_countdown_and_sleep(void)
     const int tip_font_size = 36;
     const int big_font_size = 120;
 
+
     if (!g_tip_font)
         g_tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
     if (!g_big_font)

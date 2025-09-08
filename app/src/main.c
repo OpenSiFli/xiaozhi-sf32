@@ -30,6 +30,7 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "ulog.h"
+
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -53,10 +54,10 @@
 #define UPDATE_REAL_WEATHER_AND_TIME 11
 #define PAN_TIMER_MS 3000
 #define MQTT_RECONNECT 12
+
 #define MAX_RECONNECT_ATTEMPTS 30  // 30次尝试，每次1秒，共30秒
 #define XIAOZHI_UI_THREAD_STACK_SIZE (6144)
 #define BATTERY_THREAD_STACK_SIZE (2048)
-
 
 extern rt_tick_t last_listen_tick;
 extern xiaozhi_ws_t g_xz_ws;
@@ -65,6 +66,7 @@ extern lv_obj_t *standby_screen;
 extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
+
 
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;
@@ -594,6 +596,7 @@ int main(void)
 #else
     xz_ws_audio_init(); // 初始化音频
     xz_ws_button_init2();//初始化关机键
+
 #endif
     set_pinmux();
     // Create  xiaozhi UI
