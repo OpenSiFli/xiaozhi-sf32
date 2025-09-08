@@ -91,16 +91,8 @@ static int shutdown_countdown = 3;
 static lv_timer_t *shutdown_timer = NULL;
 static volatile int g_shutdown_countdown_active = 0; // 关机倒计时标志
 
-lv_obj_t * ui_Image1 = NULL;
-lv_obj_t * ui_Image2 = NULL;
-lv_obj_t * ui_Image3 = NULL;
-lv_obj_t * ui_Image4 = NULL;
-lv_obj_t * ui_Image5 = NULL;
-lv_obj_t * ui_Image6 = NULL;
-lv_obj_t * ui_Image7 = NULL;
-lv_obj_t * ui_Container2 = NULL;
-lv_obj_t * ui_Container3 = NULL;
-lv_obj_t * ui_Image9 = NULL;
+
+
 lv_timer_t *ui_sleep_timer = NULL;
 lv_obj_t *shutdown_screen = NULL;
 lv_obj_t *sleep_screen = NULL;
