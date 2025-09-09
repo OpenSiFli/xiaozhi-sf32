@@ -41,6 +41,7 @@
 #define BRT_TB_SIZE     (sizeof(brigtness_tb)/sizeof(brigtness_tb[0]))
 #define BASE_WIDTH 390
 #define BASE_HEIGHT 450
+#define VERSION "V1.3.3"
 // 默认oled电池图标尺寸
 #define OUTLINE_W 58
 #define OUTLINE_H 33
@@ -92,7 +93,6 @@ static int shutdown_countdown = 3;
 static lv_timer_t *shutdown_timer = NULL;
 static volatile int g_shutdown_countdown_active = 0; // 关机倒计时标志
 static rt_device_t lcd_device;
-
 
 lv_timer_t *ui_sleep_timer = NULL;
 lv_obj_t *shutdown_screen = NULL;
@@ -559,6 +559,8 @@ static void startup_fadeout_ready_cb(struct _lv_anim_t* anim)
     if (standby_screen) {
         rt_kprintf("开机->待机");
         lv_screen_load(standby_screen);
+        lv_obj_set_parent(cont, lv_screen_active());
+        lv_obj_move_foreground(cont);
     }
 
 }
@@ -893,6 +895,20 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_clear_flag(standby_screen, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_bg_color(standby_screen, lv_color_hex(0x000000), 0);//黑色
 
+    lv_obj_t *standby_header_row = lv_obj_create(standby_screen);
+    lv_obj_remove_flag(standby_header_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(standby_header_row, scr_width, SCALE_DPX(40));
+    lv_obj_set_style_bg_opa(standby_header_row, LV_OPA_0, 0);
+    lv_obj_set_style_border_width(standby_header_row, 0, 0);
+    lv_obj_set_flex_flow(standby_header_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(standby_header_row, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_color(standby_header_row, lv_color_hex(0x000000), LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(standby_header_row, LV_OPA_30, LV_STATE_DEFAULT);
+    #if USING_TOUCH_SWITCH
+    lv_obj_add_event_cb(standby_header_row, header_row_event_handler, LV_EVENT_ALL, NULL);
+    #endif
+
     img_emoji = lv_img_create(standby_screen);
     LV_IMAGE_DECLARE(sleepy2);
     LV_IMAGE_DECLARE(funny2);
@@ -1206,10 +1222,12 @@ rt_err_t xiaozhi_ui_obj_init()
     col_dsc[1] = CONT_W_PER(24);
     col_dsc[3] = CONT_W_PER(10);
 
-    static int32_t row_dsc[] = {0, 0, 0, 0, 0, LV_GRID_TEMPLATE_LAST };
-    row_dsc[0] = CONT_H_PER(4);
-    row_dsc[1] = row_dsc[2] = CONT_H_PER(12);
-    row_dsc[3] = row_dsc[4] = CONT_H_PER(8);
+    static int32_t row_dsc[] = {0, 0, 0, 0, 0, 0, 0 , LV_GRID_TEMPLATE_LAST };
+    row_dsc[0] = CONT_H_PER(4);     // 第0行：4%高度
+    row_dsc[1] = row_dsc[2] = CONT_H_PER(12);  // 第1、2行：各12%高度
+    row_dsc[3] = row_dsc[4] = CONT_H_PER(8);   // 第3、4行：各8%高度
+    row_dsc[5] = CONT_H_PER(8);     // 第5行：8%高度
+    row_dsc[6] = CONT_H_PER(8);     // 第6行：8%高度，用于版本号
 
     cont = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(cont);
@@ -1234,8 +1252,7 @@ rt_err_t xiaozhi_ui_obj_init()
     volume_slider = create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
     create_tip_label(cont, "亮度", 4, 0);
     brightness_lines = create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
-
-
+    create_tip_label(cont, VERSION, 6, 2);
 
 
 /*------------------电池---------------------*/
@@ -1998,6 +2015,8 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                 case UI_MSG_SWITCH_TO_STANDBY:
                     if (standby_screen) {
                         lv_screen_load(standby_screen);
+                        lv_obj_set_parent(cont, lv_screen_active());
+                        lv_obj_move_foreground(cont);
                         }
 
                         // mic关闭，开启KWS
@@ -2015,7 +2034,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         if(g_pan_connected)
                         {
                             rt_kprintf("create sleep timer1\n");
-                            ui_sleep_timer = lv_timer_create(ui_sleep_callback, 40000, NULL);
+                            ui_sleep_timer = lv_timer_create(ui_sleep_callback, 60000, NULL);
 
                         } 
 
@@ -2038,6 +2057,8 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         }
 
                         lv_screen_load(lv_obj_get_screen(main_container));
+                        lv_obj_set_parent(cont, lv_screen_active());
+                        lv_obj_move_foreground(cont);
                     }
                     // mic开启，关闭KWS
                     xz_aec_mic_open(thiz);
