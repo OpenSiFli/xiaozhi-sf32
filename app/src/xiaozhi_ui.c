@@ -25,6 +25,7 @@
 #include "xiaozhi_audio.h"
 #include "../kws/app_recorder_process.h"
 #include "../board/board_hardware.h"
+
 #define UPDATE_REAL_WEATHER_AND_TIME 11
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
@@ -90,7 +91,7 @@ static lv_obj_t *shutdown_label = NULL;
 static int shutdown_countdown = 3;
 static lv_timer_t *shutdown_timer = NULL;
 static volatile int g_shutdown_countdown_active = 0; // 关机倒计时标志
-
+static rt_device_t lcd_device;
 
 
 lv_timer_t *ui_sleep_timer = NULL;
@@ -117,6 +118,9 @@ static char g_second_part[512] L2_RET_BSS_SECT(g_second_part);
 
 extern date_time_t g_current_time;
 extern rt_mailbox_t g_bt_app_mb;
+extern const unsigned char droid_sans_fallback_font[];
+extern const int droid_sans_fallback_font_size;
+extern uint8_t shutdown_state;
 
 // 开机动画相关全局变量
 extern const lv_image_dsc_t startup_logo;  //开机动画图标
@@ -1463,7 +1467,7 @@ void ui_swith_to_standby_screen(void)
               }
 }
 
-void ui_swith_to_xiaozhi_screen(void)
+void ui_switch_to_xiaozhi_screen(void)
 {
     if (ui_msg_queue != RT_NULL) {
                   ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
@@ -1654,13 +1658,11 @@ void xiaozhi_ui_update_ble(char *string) // ble
         }
     }
 }
-extern const unsigned char droid_sans_fallback_font[];
-extern const int droid_sans_fallback_font_size;
 
-static rt_device_t lcd_device;
 static void pm_event_handler(gui_pm_event_type_t event)
 {
     LOG_I("in pm_event_handle");
+    lv_obj_t *now_screen = lv_screen_active();
     switch (event)
     {
     case GUI_PM_EVT_SUSPEND:
@@ -1688,8 +1690,12 @@ static void pm_event_handler(gui_pm_event_type_t event)
             lv_timer_delete(ui_sleep_timer);
             ui_sleep_timer = NULL;
         }
-        rt_kprintf("恢复屏幕-> 对话\n");
-        ui_swith_to_xiaozhi_screen();
+        if (shutdown_state) //如果是关机消息触发的唤醒，就不再切换到对话界面去了
+        {
+            rt_kprintf("恢复屏幕-> 对话\n");
+            ui_switch_to_xiaozhi_screen();
+            shutdown_state = 1;
+        }
         if (!thiz->vad_enabled)
         {
             thiz->vad_enabled = true;
@@ -1911,7 +1917,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
         {
             if (ui_event == UI_EVENT_SHUTDOWN)
             {
-               show_shutdown();
+                show_shutdown();
             }
         }
         // 处理按钮事件

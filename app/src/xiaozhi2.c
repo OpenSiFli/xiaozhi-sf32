@@ -83,7 +83,7 @@ static const char *hello_message =
 static lv_obj_t *countdown_screen = NULL;
 static rt_thread_t countdown_thread = RT_NULL;
 static bool  g_ota_verified = false;
-
+uint8_t shutdown_state = 1; 
 
 typedef struct
 {
@@ -322,7 +322,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
         rt_kprintf("按键->对话");
         if (now_screen == standby_screen)
         {
-            ui_swith_to_xiaozhi_screen();
+            ui_switch_to_xiaozhi_screen();
         }
     
         // 1. 检查是否处于睡眠状态（WebSocket未连接）
@@ -374,7 +374,6 @@ void simulate_button_released()
 }
 #endif
 
-
 static void xz_button2_event_handler(int32_t pin, button_action_t action)
 {
     if (action == BUTTON_PRESSED)
@@ -394,10 +393,13 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
 
             // 长按3秒，直接发送关机消息到ui_task
         lv_obj_t *now_screen = lv_screen_active();
-        if (now_screen != standby_screen)
+        if (now_screen != standby_screen && g_activation_context.sem != RT_NULL)
         {
             rt_sem_release(g_activation_context.sem);
         }
+        shutdown_state = 0;
+        gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
+        rt_thread_mdelay(100);
         rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);
     }
 
@@ -494,7 +496,7 @@ void parse_helLo(const u8_t *data, u16_t len)
         xiaozhi_ui_update_emoji("neutral");
         xiaozhi_ui_update_standby_emoji("funny");
         rt_kprintf("hello->对话\n");
-        ui_swith_to_xiaozhi_screen();//切换到小智对话界面
+        ui_switch_to_xiaozhi_screen();//切换到小智对话界面
 #ifdef PKG_XIAOZHI_USING_AEC
         ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id, kListeningModeAlwaysOn);
 #endif

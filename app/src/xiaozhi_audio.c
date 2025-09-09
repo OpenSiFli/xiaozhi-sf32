@@ -390,7 +390,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
             rt_kprintf("mqtt按键->对话\n");
             if (now_screen == standby_screen)
             {
-                ui_swith_to_xiaozhi_screen();
+                ui_switch_to_xiaozhi_screen();
             }
             if (mqtt_g_state == kDeviceStateUnknown) // goodby唤醒
             {
