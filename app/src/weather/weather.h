@@ -1,5 +1,5 @@
-#ifndef XIAOZHI_WEATHER_H
-#define XIAOZHI_WEATHER_H
+#ifndef WEATHER_H
+#define WEATHER_H
 #include "time.h"
 #include <stdlib.h>
 #include <stdio.h>

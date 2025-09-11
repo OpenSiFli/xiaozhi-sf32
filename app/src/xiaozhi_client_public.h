@@ -1,5 +1,5 @@
-#ifndef XIAOZHI_PUBLIC_H
-#define XIAOZHI_PUBLIC_H
+#ifndef XIAOZHI_CLIENT_PUBLIC_H
+#define XIAOZHI_CLIENT_PUBLIC_H
 
 
 #include <rtthread.h>
@@ -9,7 +9,7 @@
 #include "lwip/apps/mqtt.h"
 #include "lwip/udp.h"
 #include "lwip/tcpip.h"
-#include "xiaozhi.h"
+#include "xiaozhi_mqtt.h"
 #include "bf0_hal.h"
 #include "button.h"
 #include "os_adaptor.h"

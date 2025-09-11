@@ -1,5 +1,5 @@
 // xiaozhi_public.c
-#include "xiaozhi_public.h"
+#include "xiaozhi_client_public.h"
 #include <rtthread.h>
 #include "bf0_hal.h"
 #include "bts2_global.h"
@@ -12,7 +12,7 @@
 #include "string.h"
 #include <lwip/dns.h>
 #include <lwip/sys.h>
-#include "xiaozhi2.h"
+#include "xiaozhi_websocket.h"
 #include "lwip/api.h"
 #include "lwip/dns.h"
 #include "lwip/apps/websocket_client.h"

@@ -16,7 +16,7 @@
 #include "et_thres_list.h"
 #include "et_weights.h"
 #include "third_kws_event.h"
-#include "xiaozhi_public.h"
+#include "xiaozhi_client_public.h"
 extern void  simulate_button_pressed();
 
 #if 0

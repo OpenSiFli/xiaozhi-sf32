@@ -4,7 +4,7 @@
 #include "audio_server.h"
 #include "bsp_et_asr_ctrl.h"
 #include "lib_et_asr.h"
-#include "xiaozhi_public.h"
+#include "xiaozhi_client_public.h"
 #include "app_recorder_process.h"
 
 

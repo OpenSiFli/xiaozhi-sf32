@@ -7,7 +7,7 @@
 #include "drivers/rt_drv_pwm.h"
 #include "bf0_hal.h"
 #include "bf0_pm.h"
-#include "xiaozhi_public.h"
+#include "xiaozhi_client_public.h"
 #include "bts2_global.h"
 #include "bts2_app_pan.h"
 #include "bt_connection_manager.h"

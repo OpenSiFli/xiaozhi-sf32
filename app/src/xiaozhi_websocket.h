@@ -1,5 +1,5 @@
-#ifndef XIAOZHI2_H
-#define XIAOZHI2_H
+#ifndef XIAOZHI_WEBSOCKET_H
+#define XIAOZHI_WEBSOCKET_H
 
 #ifdef __cplusplus
 extern "C"
@@ -12,7 +12,7 @@ extern "C"
 #include "lwip/apps/websocket_client.h"
 #include "lwip/apps/mqtt_priv.h"
 #include "lwip/apps/mqtt.h"
-#include "xiaozhi.h"
+#include "xiaozhi_mqtt.h"
 #include "bf0_hal.h"
 #include "bts2_app_pan.h"
 #include <cJSON.h>
@@ -51,4 +51,4 @@ void ws_send_listen_stop(void *ws, char *session_id);
 }
 #endif
 
-#endif // XIAOZHI2_H
+#endif // XIAOZHI_WEBSOCKET_H

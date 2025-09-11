@@ -6,7 +6,7 @@
 
 #include "rtthread.h"
 #include "rtdevice.h"
-#include "xiaozhi_public.h"
+#include "xiaozhi_client_public.h"
 #include "lwip/api.h"
 #include "lwip/dns.h"
 #include <webclient.h>
@@ -14,7 +14,7 @@
 #include "ulog.h"
 #include "bts2_app_inc.h"
 #include "ntp.h"
-#include "xiaozhi_weather.h"
+#include "weather.h"
 #include "littlevgl2rtt.h"
 #include <stdlib.h>
 #include <stdio.h>

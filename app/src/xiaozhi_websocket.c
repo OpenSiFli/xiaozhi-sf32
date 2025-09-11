@@ -13,8 +13,8 @@
 #include "lwip/apps/websocket_client.h"
 #include "lwip/apps/mqtt_priv.h"
 #include "lwip/apps/mqtt.h"
-#include "xiaozhi.h"
-#include "xiaozhi2.h"
+#include "xiaozhi_mqtt.h"
+#include "xiaozhi_websocket.h"
 #include "bf0_hal.h"
 #include "bts2_global.h"
 #include "bts2_app_pan.h"
@@ -32,11 +32,11 @@
 #include "lv_obj.h"
 #include "lv_label.h"
 #include "lib_et_asr.h"
-#include "xiaozhi_weather.h"
+#include "../weather/weather.h"
 #ifdef BSP_USING_PM
     #include "gui_app_pm.h"
 #endif // BSP_USING_PM
-#include "xiaozhi_public.h"
+#include "xiaozhi_client_public.h"
 #include "xiaozhi_ui.h"
 #include "xiaozhi_audio.h"
 

@@ -10,8 +10,8 @@
 #include <webclient.h>
 #include "rgbled_mcp.h" 
 // #include "lwip/apps/websocket_client.h"   // 提供 wsock_write 和 OPCODE_TEXT 定义
-#include "../xiaozhi2.h"        // 提供 g_xz_ws 定义
-#include "../xiaozhi.h" 
+#include "../xiaozhi_websocket.h"        // 提供 g_xz_ws 定义
+#include "../xiaozhi_mqtt.h" 
 extern xiaozhi_ws_t g_xz_ws; 
 extern xiaozhi_context_t g_xz_context;     
 extern uint8_t aec_enabled;

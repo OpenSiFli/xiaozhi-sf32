@@ -17,8 +17,8 @@
 #include "bts2_app_inc.h"
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
-#include "xiaozhi.h"
-#include "xiaozhi_public.h"
+#include "xiaozhi_mqtt.h"
+#include "xiaozhi_client_public.h"
 #ifdef LWIP_ALTCP_TLS
     #include <lwip/altcp_tls.h>
 #endif

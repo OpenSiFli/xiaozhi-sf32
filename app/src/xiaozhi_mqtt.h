@@ -1,5 +1,5 @@
-#ifndef XIAOZHI_H
-#define XIAOZHI_H
+#ifndef XIAOZHI_MQTT_H
+#define XIAOZHI_MQTT_H
 
     #define GET_HEADER_BUFSZ 1024             // 头部大小
     #define GET_RESP_BUFSZ 1024               // 响应缓冲区大小
