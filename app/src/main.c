@@ -379,6 +379,14 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             rt_mb_send(g_bt_app_mb, BT_APP_READY);
         }
         break;
+        case BT_NOTIFY_COMMON_ACL_CONNECTED:
+        {
+            LOG_I("BT_NOTIFY_COMMON_ACL_CONNECTED\n");
+			// 清除蓝牙主动断开标志位
+            Initiate_disconnection_flag = 0;
+
+        }
+        break;
         case BT_NOTIFY_COMMON_ACL_DISCONNECTED:
         {
             bt_notify_device_base_info_t *info =
@@ -707,8 +715,7 @@ int main(void)
             xiaozhi_ui_update_ble("open");
             xiaozhi_ui_chat_status("初始化...");
             xiaozhi_ui_update_emoji("neutral");
-            // 清除主动断开标志位
-            Initiate_disconnection_flag = 0;
+
             rt_thread_mdelay(2000);
             // 执行NTP与天气同步
             xiaozhi_time_weather();
