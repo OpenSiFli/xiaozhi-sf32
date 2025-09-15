@@ -41,7 +41,7 @@
 #define BRT_TB_SIZE     (sizeof(brigtness_tb)/sizeof(brigtness_tb[0]))
 #define BASE_WIDTH 390
 #define BASE_HEIGHT 450
-#define VERSION "V1.3.3"
+#define VERSION "V1.3.4"
 // 默认oled电池图标尺寸
 #define OUTLINE_W 58
 #define OUTLINE_H 33
