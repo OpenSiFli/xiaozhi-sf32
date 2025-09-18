@@ -30,7 +30,7 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "ulog.h"
-
+#include "drv_gpio.h"
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -83,6 +83,8 @@ static uint8_t g_sleep_enter_flag = 0;    // 进入睡眠标志位
 // UI线程和battery线程控制块
 static struct rt_thread xiaozhi_ui_thread;
 static struct rt_thread battery_thread;
+
+
 //ui线程
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
 L2_RET_BSS_SECT_BEGIN(xiaozhi_ui_thread_stack) //6000地址
@@ -585,6 +587,7 @@ static int32_t Write_MAC(int argc, char **argv)
 }
 MSH_CMD_EXPORT(Write_MAC, write mac);
 
+
 int main(void)
 {
     check_poweron_reason();
@@ -624,8 +627,8 @@ int main(void)
     {
         rt_kprintf("Failed to init xiaozhi UI thread\n");
     }
-
     // Connect BT PAN
+   
     g_bt_app_mb = rt_mb_create("bt_app", 8, RT_IPC_FLAG_FIFO);
 #ifdef BSP_BT_CONNECTION_MANAGER
     bt_cm_set_profile_target(BT_CM_HID, BT_LINK_PHONE, 1);
@@ -652,7 +655,6 @@ int main(void)
     {
         rt_kprintf("Failed to init battery thread\n");
     }
-
 #ifdef BSP_USING_BOARD_SF32LB52_XTY_AI
     if (pulse_encoder_init() != RT_EOK)
     {

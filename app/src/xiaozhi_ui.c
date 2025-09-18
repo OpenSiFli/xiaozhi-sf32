@@ -49,6 +49,10 @@
 #define OUTLINE_W_ST7789 40
 #define OUTLINE_H_ST7789 20
 
+#define CHARGE_DETECT_PIN 44
+
+
+
 // 定义UI消息类型
 typedef enum {
     UI_MSG_CHAT_STATUS,
@@ -67,7 +71,8 @@ typedef enum {
     UI_MSG_UPDATE_WEATHER_AND_TIME,
     UI_MSG_STANDBY_CHAT_OUTPUT,
     UI_MSG_VOLUME_UPDATE,  //更新下拉菜单里面的音量进度条
-    UI_MSG_BRIGHTNESS_UPDATE  //更新下拉菜单里面的亮度进度条
+    UI_MSG_BRIGHTNESS_UPDATE,  //更新下拉菜单里面的亮度进度条
+    UI_MSG_CHARGE_STATUS_CHANGED
 
 } ui_msg_type_t;
 
@@ -93,6 +98,9 @@ static int shutdown_countdown = 3;
 static lv_timer_t *shutdown_timer = NULL;
 static volatile int g_shutdown_countdown_active = 0; // 关机倒计时标志
 static rt_device_t lcd_device;
+static lv_obj_t* charging_icon = NULL;
+static lv_obj_t* standby_charging_icon = NULL;
+static rt_timer_t charge_detect_timer = RT_NULL; 
 
 lv_timer_t *ui_sleep_timer = NULL;
 lv_obj_t *shutdown_screen = NULL;
@@ -103,6 +111,8 @@ rt_timer_t update_time_ui_timer = RT_NULL;
 rt_timer_t update_weather_ui_timer = RT_NULL;
 rt_tick_t last_listen_tick = 0;
 uint8_t vad_enable = 1;      //0是支持打断，1是不支持打断
+uint8_t last_charge_status = 0; // 上次充电状态
+
 #if defined (KWS_ENABLE_DEFAULT) && KWS_ENABLE_DEFAULT
 uint8_t aec_enabled = 1;
 #else
@@ -149,6 +159,9 @@ extern BOOL g_pan_connected;
 /*对话界面ble图片资源*/
 extern const lv_image_dsc_t ble; // ble
 extern const lv_image_dsc_t ble_close;
+
+/*充电图标 */
+extern const lv_image_dsc_t charging_icon_image; 
 
 /*对话画面*/
 lv_obj_t *main_container;
@@ -278,7 +291,48 @@ static void sleep_countdown_cb(lv_timer_t *timer)
         gui_pm_fsm(GUI_PM_ACTION_SLEEP);
     }
 }
-
+static void charge_detect_handler(void *parameter)
+{
+    rt_uint8_t current_status;
+    
+    // 读取PA44引脚电平状态
+    current_status = rt_pin_read(CHARGE_DETECT_PIN);
+    //rt_kprintf("charge detect status: %d,last status: %d\n", current_status, last_charge_status);
+    // 检查状态是否发生变化
+    if (current_status != last_charge_status) 
+    {
+        last_charge_status = current_status;
+        
+        if (current_status == PIN_HIGH) 
+        {
+            xiaozhi_ui_update_charge_status(PIN_HIGH);
+        } else 
+        {
+            xiaozhi_ui_update_charge_status(PIN_LOW);
+        }
+    }
+}
+static int charge_detect_init(void)
+{
+    rt_pin_mode(CHARGE_DETECT_PIN, PIN_MODE_INPUT);  
+    last_charge_status = rt_pin_read(CHARGE_DETECT_PIN);
+    charge_detect_timer  = rt_timer_create("charge_detect", 
+                                          charge_detect_handler,
+                                          RT_NULL,
+                                          rt_tick_from_millisecond(500),
+                                          RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_SOFT_TIMER);
+    
+    if (charge_detect_timer != RT_NULL) {
+        rt_timer_start(charge_detect_timer);
+        charge_detect_handler(RT_NULL);
+        xiaozhi_ui_update_charge_status(last_charge_status);
+        rt_kprintf("Charge detection initialized on PA44\n");
+        return 0;
+    } else {
+        rt_kprintf("Failed to create charge detection timer\n");
+        return -1;
+    }
+}
 void show_sleep_countdown_and_sleep(void)
 {
     if (g_sleep_countdown_active) return; // 已经在倒计时，直接返回
@@ -1019,6 +1073,12 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_style_text_font(battery_percent_label, font_medium, 0);
     lv_obj_align(battery_percent_label, LV_ALIGN_CENTER, 0, 0); // 在圆弧中心
 
+    standby_charging_icon = lv_img_create(battery_arc);
+    lv_img_set_src(standby_charging_icon, &charging_icon_image);
+    lv_obj_set_size(standby_charging_icon, 24, 24); // 设置合适的尺寸
+    lv_obj_align(standby_charging_icon, LV_ALIGN_CENTER, 0, 0); // 在圆弧中心对齐
+    lv_obj_add_flag(standby_charging_icon, LV_OBJ_FLAG_HIDDEN); // 初始隐藏
+
 
 //天气
     weather_bgimg = lv_img_create(standby_screen);
@@ -1131,6 +1191,7 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_label_set_text(ui_Label3, "等待连接");
 
     LV_IMAGE_DECLARE(ble);
+    LV_IMAGE_DECLARE(charging_icon_image);
     LV_IMAGE_DECLARE(ble_close);
 
 
@@ -1278,14 +1339,21 @@ rt_err_t xiaozhi_ui_obj_init()
     // lv_obj_add_style(g_battery_label, &style_battery, 0);
     lv_label_set_text_fmt(g_battery_label, "%d%%", g_battery_level);
     lv_obj_align(g_battery_label, LV_ALIGN_CENTER, 0, 0);
+    
+ //充电图标       
+    charging_icon = lv_img_create(header_row);
+    lv_img_set_src(charging_icon, &charging_icon_image);
+    lv_obj_set_size(charging_icon, 32, 32);
+    lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN); // 初始隐藏
+    lv_obj_align_to(charging_icon, battery_outline, LV_ALIGN_OUT_LEFT_MID, 0, 0);
 
     // 插入右侧空白对象用于对称布局
     lv_obj_t *spacer_right = lv_obj_create(header_row);
     lv_obj_remove_flag(spacer_right, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_opa(spacer_right, LV_OPA_0, 0);
     lv_obj_set_style_border_width(spacer_right, 0, 0);
-    lv_obj_set_size(spacer_right, SCALE_DPX(40),
-                    LV_SIZE_CONTENT); // 宽度为 40dp
+    lv_obj_set_size(spacer_right, SCALE_DPX(50),
+                    LV_SIZE_CONTENT); // 宽度为 50dp
 
     // ====== 中间 GIF 图片容器 img_container ======
     img_container = lv_obj_create(main_container);
@@ -1431,6 +1499,33 @@ void xiaozhi_ui_update_brightness(int brightness)
                 rt_free(msg);
             }
         }
+    }
+}
+//充电状态更新函数
+void xiaozhi_ui_update_charge_status(uint8_t is_charging)
+{
+    if (ui_msg_queue != RT_NULL) 
+    {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_CHARGE_STATUS_CHANGED;
+            msg->data = (char*)rt_malloc(sizeof(uint8_t));
+            if (msg->data != RT_NULL) {
+                *((uint8_t*)msg->data) = is_charging;
+                if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
+                    LOG_E("Failed to send charge status update UI message");
+                    rt_free(msg->data);
+                    rt_free(msg);
+                }
+            } else {
+                rt_free(msg);
+               
+            }
+        }
+    }
+    else 
+    {
+        rt_kprintf("ui_msg_queue = null\n");
     }
 }
 
@@ -1810,7 +1905,8 @@ void xiaozhi_update_battery_level(int level)
     }
     
     // 更新电池电量百分比文本
-    if (battery_percent_label) {
+    if (battery_percent_label) 
+    {
         lv_label_set_text_fmt(battery_percent_label, "%d%%", g_battery_level);
     }
 
@@ -1885,6 +1981,8 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
     {
         return;
     }
+
+    charge_detect_init(); // 初始化充电检测
 
     xiaozhi_ui_update_ble("close");
     xiaozhi_ui_chat_status("连接中...");
@@ -1977,6 +2075,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
            // rt_kprintf("Battery level received: %d\n", battery_level);
             xiaozhi_update_battery_level(battery_level);
         }
+        
         // 处理UI消息队列中的消息
         ui_msg_t* msg;
         while (rt_mq_recv(ui_msg_queue, &msg, sizeof(ui_msg_t*), 0) == RT_EOK)
@@ -2113,7 +2212,38 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                             }
                         }
                     }
-                    break;      
+                    break;
+                case UI_MSG_CHARGE_STATUS_CHANGED:
+                    if(msg->data) {
+                        uint8_t is_charging = *((uint8_t*)msg->data);
+                        if (charging_icon) 
+                        {
+                            if (is_charging) 
+                            {
+                                lv_obj_clear_flag(charging_icon, LV_OBJ_FLAG_HIDDEN);
+                                rt_kprintf("显示充电图标\n");
+                            } 
+                            else 
+                            {
+                                lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN);
+                                rt_kprintf("隐藏充电图标\n");
+                            }
+                        }
+                        if (standby_charging_icon) 
+                        {
+                            if (is_charging) 
+                            {
+                                lv_obj_clear_flag(standby_charging_icon, LV_OBJ_FLAG_HIDDEN);
+                                rt_kprintf("显示待机界面充电图标\n");
+                            } 
+                            else 
+                            {
+                                lv_obj_add_flag(standby_charging_icon, LV_OBJ_FLAG_HIDDEN);
+                                rt_kprintf("隐藏待机界面充电图标\n");
+                            }
+                        }
+                    }
+                break;      
                 case UI_MSG_UPDATE_EMOJI:
                     if(msg->data)
                     {
