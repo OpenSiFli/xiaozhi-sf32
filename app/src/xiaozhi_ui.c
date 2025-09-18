@@ -161,7 +161,7 @@ extern const lv_image_dsc_t ble; // ble
 extern const lv_image_dsc_t ble_close;
 
 /*充电图标 */
-extern const lv_image_dsc_t charging_icon_image; 
+extern const lv_image_dsc_t cdian2; 
 
 /*对话画面*/
 lv_obj_t *main_container;
@@ -1074,7 +1074,7 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_align(battery_percent_label, LV_ALIGN_CENTER, 0, 0); // 在圆弧中心
 
     standby_charging_icon = lv_img_create(battery_arc);
-    lv_img_set_src(standby_charging_icon, &charging_icon_image);
+    lv_img_set_src(standby_charging_icon, &cdian2);
     lv_obj_set_size(standby_charging_icon, 24, 24); // 设置合适的尺寸
     lv_obj_align(standby_charging_icon, LV_ALIGN_CENTER, 0, 0); // 在圆弧中心对齐
     lv_obj_add_flag(standby_charging_icon, LV_OBJ_FLAG_HIDDEN); // 初始隐藏
@@ -1191,7 +1191,7 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_label_set_text(ui_Label3, "等待连接");
 
     LV_IMAGE_DECLARE(ble);
-    LV_IMAGE_DECLARE(charging_icon_image);
+    LV_IMAGE_DECLARE(cdian2);
     LV_IMAGE_DECLARE(ble_close);
 
 
@@ -1342,7 +1342,7 @@ rt_err_t xiaozhi_ui_obj_init()
     
  //充电图标       
     charging_icon = lv_img_create(header_row);
-    lv_img_set_src(charging_icon, &charging_icon_image);
+    lv_img_set_src(charging_icon, &cdian2);
     lv_obj_set_size(charging_icon, 32, 32);
     lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN); // 初始隐藏
     lv_obj_align_to(charging_icon, battery_outline, LV_ALIGN_OUT_LEFT_MID, 0, 0);
