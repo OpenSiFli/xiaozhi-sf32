@@ -50,7 +50,7 @@
 #define OUTLINE_W_ST7789 40
 #define OUTLINE_H_ST7789 20
 
-#define CHARGE_DETECT_PIN 44
+
 
 
 
@@ -251,25 +251,37 @@ float get_scale_factor(void)
     return (scale_x < scale_y) ? scale_x : scale_y;
 }
 
+
 static void charge_detect_handler(void *parameter)
 {
     rt_uint8_t current_status;
+    static int last_battery_level = -1;  // 记录上次的电量，初始化为-1确保第一次会更新
     
-    // 读取PA44引脚电平状态
     current_status = rt_pin_read(CHARGE_DETECT_PIN);
-    //rt_kprintf("charge detect status: %d,last status: %d\n", current_status, last_charge_status);
-    // 检查状态是否发生变化
-    if (current_status != last_charge_status) 
+    
+    // 检查状态是否发生变化，或者电量在100%临界值发生变化
+    bool status_changed = (current_status != last_charge_status);
+    bool battery_critical_change = (last_battery_level < 100 && g_battery_level >= 100) || 
+                                  (last_battery_level >= 100 && g_battery_level < 100);
+
+    if (status_changed || battery_critical_change) 
     {
         last_charge_status = current_status;
+        last_battery_level = g_battery_level;
         
         if (current_status == PIN_HIGH) 
         {
             xiaozhi_ui_update_charge_status(PIN_HIGH);
-        } else 
+        } 
+        else 
         {
             xiaozhi_ui_update_charge_status(PIN_LOW);
         }
+    } 
+    else 
+    {
+        // 更新电量记录
+        last_battery_level = g_battery_level;
     }
 }
 static int charge_detect_init(void)
@@ -1986,30 +1998,46 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                 case UI_MSG_CHARGE_STATUS_CHANGED:
                     if(msg->data) {
                         uint8_t is_charging = *((uint8_t*)msg->data);
+                        bool should_show_charging = is_charging && (g_battery_level < 100);
                         if (charging_icon) 
                         {
-                            if (is_charging) 
+                            if (should_show_charging) 
                             {
                                 lv_obj_clear_flag(charging_icon, LV_OBJ_FLAG_HIDDEN);
                                 rt_kprintf("显示充电图标\n");
                             } 
                             else 
                             {
-                                lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN);
-                                rt_kprintf("隐藏充电图标\n");
+                               if (is_charging && g_battery_level >= 100) 
+                                {
+                                    rt_kprintf("电量已满，隐藏充电图标 (电量: %d%%)\n", g_battery_level);
+                                    lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN);
+                                } 
+                                else 
+                                {
+                                    rt_kprintf("隐藏充电图标\n");
+                                    lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN);
+                                }
                             }
                         }
                         if (standby_charging_icon) 
                         {
-                            if (is_charging) 
+                            if (should_show_charging) 
                             {
                                 lv_obj_clear_flag(standby_charging_icon, LV_OBJ_FLAG_HIDDEN);
-                                rt_kprintf("显示待机界面充电图标\n");
+                                rt_kprintf("显示待机界面充电图标 (电量: %d%%)\n", g_battery_level);
                             } 
                             else 
                             {
                                 lv_obj_add_flag(standby_charging_icon, LV_OBJ_FLAG_HIDDEN);
-                                rt_kprintf("隐藏待机界面充电图标\n");
+                                if (is_charging && g_battery_level >= 100) 
+                                {
+                                    rt_kprintf("电量已满，隐藏待机界面充电图标 (电量: %d%%)\n", g_battery_level);
+                                } 
+                                else 
+                                {
+                                    rt_kprintf("隐藏待机界面充电图标\n");
+                                }
                             }
                         }
                     }

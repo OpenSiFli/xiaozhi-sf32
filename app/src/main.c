@@ -67,7 +67,6 @@ extern lv_obj_t *standby_screen;
 extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
-extern uint8_t last_charge_status;
 extern rt_mailbox_t g_ui_task_mb;
 
 bt_app_t g_bt_app_env;
@@ -196,6 +195,7 @@ static void battery_level_task(void *parameter)
         rt_kprintf("Failed to create mailbox g_battery_mb\n");
         return;
     }
+    rt_uint8_t current_status;
     while (1)
     {
         rt_device_t battery_device = rt_device_find("bat1");
@@ -230,9 +230,10 @@ static void battery_level_task(void *parameter)
         }
 
         rt_mb_send(g_battery_mb, battery_percentage);
-        rt_kprintf("battery_percentage: %d, last_charge_status: %d \n", battery_percentage, last_charge_status);
+        current_status = rt_pin_read(CHARGE_DETECT_PIN);
+        rt_kprintf("battery_percentage: %d, current_status: %d \n", battery_percentage, current_status);
         //当电量低于阈值并且当前没有处于充电中并的时候
-        if (battery_percentage < LOW_BATTERY_THRESHOLD && low_battery_shutdown_triggered && !last_charge_status) 
+        if (battery_percentage < LOW_BATTERY_THRESHOLD && low_battery_shutdown_triggered && !current_status) 
         {
             lv_obj_t *now_screen = lv_screen_active();
             rt_kprintf("now_screen address: %p, sleep_screen address: %p, standby_screen address: %p\n", 
