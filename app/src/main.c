@@ -58,6 +58,7 @@
 #define MAX_RECONNECT_ATTEMPTS 30  // 30次尝试，每次1秒，共30秒
 #define XIAOZHI_UI_THREAD_STACK_SIZE (6144)
 #define BATTERY_THREAD_STACK_SIZE (2048)
+#define LOW_BATTERY_THRESHOLD 5
 
 extern rt_tick_t last_listen_tick;
 extern xiaozhi_ws_t g_xz_ws;
@@ -66,7 +67,8 @@ extern lv_obj_t *standby_screen;
 extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
-
+extern uint8_t last_charge_status;
+extern rt_mailbox_t g_ui_task_mb;
 
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;
@@ -75,6 +77,8 @@ BOOL first_pan_connected = FALSE;
 int first_reconnect_attempts = 0;
 uint8_t Initiate_disconnection_flag = 0;//蓝牙主动断开标志
 rt_mailbox_t g_battery_mb;
+bool g_skip_startup = true; 
+bool low_battery_shutdown_triggered = true;
 
 static rt_timer_t s_reconnect_timer = NULL;
 static rt_timer_t s_sleep_timer = NULL;
@@ -184,9 +188,9 @@ void HAL_MspInit(void)
     BSP_IO_Init();
     set_pinmux();
 }
+
 static void battery_level_task(void *parameter)
 {
-    g_battery_mb = rt_mb_create("battery_level", 1, RT_IPC_FLAG_FIFO);
     if (g_battery_mb == NULL)
     {
         rt_kprintf("Failed to create mailbox g_battery_mb\n");
@@ -226,7 +230,28 @@ static void battery_level_task(void *parameter)
         }
 
         rt_mb_send(g_battery_mb, battery_percentage);
-        rt_thread_mdelay(10000);
+        rt_kprintf("battery_percentage: %d, last_charge_status: %d \n", battery_percentage, last_charge_status);
+        //当电量低于阈值并且当前没有处于充电中并的时候
+        if (battery_percentage < LOW_BATTERY_THRESHOLD && low_battery_shutdown_triggered && !last_charge_status) 
+        {
+            lv_obj_t *now_screen = lv_screen_active();
+            rt_kprintf("now_screen address: %p, sleep_screen address: %p, standby_screen address: %p\n", 
+               now_screen, sleep_screen, standby_screen);
+            low_battery_shutdown_triggered = false;
+            rt_kprintf("Low battery ,shutdown\n");
+            // 发送消息到UI线程显示低电量关机页面
+            if (g_ui_task_mb != RT_NULL) 
+            {
+                if(now_screen == sleep_screen && now_screen != NULL)
+                {
+                    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
+                }
+                
+                rt_thread_mdelay(100);
+                rt_mb_send(g_ui_task_mb, UI_EVENT_LOW_BATTERY_SHUTDOWN);
+            }
+        }
+        rt_thread_mdelay(5000);
     }
 }
 
@@ -587,6 +612,63 @@ static int32_t Write_MAC(int argc, char **argv)
 }
 MSH_CMD_EXPORT(Write_MAC, write mac);
 
+void check_low_power(void)
+{
+    rt_device_t battery_device = rt_device_find("bat1");
+    if (battery_device) {
+        rt_adc_cmd_read_arg_t read_arg;
+        read_arg.channel = 7;
+        rt_adc_enable((rt_adc_device_t)battery_device, read_arg.channel);
+        rt_uint32_t battery_level = rt_adc_read((rt_adc_device_t)battery_device, read_arg.channel);
+        rt_adc_disable((rt_adc_device_t)battery_device, read_arg.channel);
+        
+        uint32_t battery_percentage = 0;
+        if (battery_level < 36000) {
+            battery_percentage = 0;
+        } else if (battery_level > 42000) {
+            battery_percentage = 100;
+        } else {
+            battery_percentage = ((battery_level - 36000) * 100) / (42000 - 36000);
+        }
+        
+        // 检查充电状态
+        rt_pin_mode(44, PIN_MODE_INPUT);
+        uint8_t charge_status = rt_pin_read(44);
+        
+        rt_kprintf("Boot battery check: %d%%, charging: %d\n", battery_percentage, charge_status);
+        
+        // 如果低电量且未充电，进入低电量关机流程
+        if (battery_percentage < LOW_BATTERY_THRESHOLD && !charge_status) 
+        {
+            g_skip_startup = false;
+            rt_kprintf("电量不足，进入低电量关机流程，当前电量为%d%%\n", battery_percentage);
+            xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
+            rt_err_t result = rt_thread_init(&xiaozhi_ui_thread,
+                                             "xz_ui",
+                                             xiaozhi_ui_task,
+                                             NULL,
+                                             &xiaozhi_ui_thread_stack[0],
+                                             XIAOZHI_UI_THREAD_STACK_SIZE,
+                                             30,
+                                             10);
+            if (result == RT_EOK) {
+                rt_thread_startup(&xiaozhi_ui_thread);
+            }
+            
+            g_ui_task_mb = rt_mb_create("ui_mb", 8, RT_IPC_FLAG_FIFO);
+            rt_thread_mdelay(2000);
+            if (g_ui_task_mb != RT_NULL) {
+                rt_mb_send(g_ui_task_mb, UI_EVENT_LOW_BATTERY_WARNING);
+            }
+            
+            while (1) {
+                rt_thread_mdelay(1000);
+
+            }
+        }
+        rt_kprintf("电量充足，正常开机\n");
+    }
+}
 
 int main(void)
 {
@@ -598,6 +680,10 @@ int main(void)
         rt_kprintf("Failed to create mailbox g_button_event_mb\n");
         return 0;
     }
+    //初始化电池邮箱
+    g_battery_mb = rt_mb_create("battery_level", 1, RT_IPC_FLAG_FIFO);
+    check_low_power();
+
     rt_kprintf("Xiaozhi start!!!\n");
     audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, VOL_DEFAULE_LEVEL); // 设置音量 
     xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
