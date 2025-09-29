@@ -251,7 +251,6 @@ float get_scale_factor(void)
     return (scale_x < scale_y) ? scale_x : scale_y;
 }
 
-
 static void charge_detect_handler(void *parameter)
 {
     rt_uint8_t current_status;
