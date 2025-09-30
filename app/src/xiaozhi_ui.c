@@ -32,7 +32,7 @@
 #define TOUCH_NAME "touch"
 #define SCALE_DPX(val) LV_DPX((val) * g_scale)
 #define IDLE_TIME_LIMIT  (20000)
-#define SHOW_TEXT_LEN 100
+#define SHOW_TEXT_LEN 120
 #define CONT_IDLE           0x01
 #define CONT_HIDDEN         0x02
 #define CONT_DEFAULT_STATUS     (CONT_IDLE | CONT_HIDDEN)
@@ -1823,7 +1823,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             switch (btn_event)
             {
             case BUTTON_EVENT_PRESSED:
-                    //ws_send_speak_abort(&g_xz_ws.clnt, g_xz_ws.session_id,kAbortReasonWakeWordDetected);                                           
+                    ws_send_speak_abort(&g_xz_ws.clnt, g_xz_ws.session_id,kAbortReasonWakeWordDetected);                                           
                     xz_speaker(0); // 关闭扬声器
 					rt_kprintf("vad_enabled jjjjjk\n");
 #ifdef BSP_USING_PM
@@ -2185,7 +2185,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                             if (!g_split_text_timer) {
                                 g_split_text_timer = rt_timer_create(
                                     "next_text", switch_to_second_part, NULL,
-                                    rt_tick_from_millisecond(6000), // 9秒后显示下一部分
+                                    rt_tick_from_millisecond(7000), // 6.5秒后显示下一部分
                                     RT_TIMER_FLAG_ONE_SHOT | RT_TIMER_FLAG_SOFT_TIMER);
                             } else {
                                 rt_timer_stop(g_split_text_timer);
@@ -2228,7 +2228,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
 
                             // 重置定时器以显示下一部分
                             rt_timer_control(g_split_text_timer, RT_TIMER_CTRL_SET_TIME,
-                                            &(rt_tick_t){rt_tick_from_millisecond(6000)});
+                                            &(rt_tick_t){rt_tick_from_millisecond(7000)});
                             rt_timer_start(g_split_text_timer);
                         } else {
                             // 最后一部分，直接显示
