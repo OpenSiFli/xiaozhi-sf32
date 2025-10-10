@@ -518,6 +518,7 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             }
             rt_mb_send(g_bt_app_mb, BT_APP_CONNECT_PAN_SUCCESS);
             g_pan_connected = TRUE; // 更新PAN连接状态
+            
         }
         break;
         case BT_NOTIFY_PAN_PROFILE_DISCONNECTED:
@@ -810,6 +811,7 @@ int main(void)
             xiaozhi_time_weather();
             //xiaozhi_ui_chat_output("连接小智中...");
             xiaozhi_ui_standby_chat_output("请按键连接小智...");
+            lv_display_trigger_activity(NULL);
 
 #ifdef XIAOZHI_USING_MQTT
             xiaozhi(0,NULL);
