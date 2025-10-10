@@ -2254,7 +2254,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             //rt_kprintf("current_screen: %p, main_container: %p\n", current_screen, main_container);
             //rt_kprintf("inactive_time: %d, limit: %d\n", lv_display_get_inactive_time(NULL), IDLE_TIME_LIMIT);
             if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen != standby_screen && current_screen != g_startup_screen && current_screen != shutdown_screen &&
-    current_screen != sleep_screen && current_screen != low_battery_shutdown_screen) //如果当前满足了屏幕不活跃的时间，并且当前屏幕不是待机屏幕，当前屏幕不是开机启动屏幕，当前屏幕不是关机屏幕，当前屏幕不是睡眠屏幕
+    current_screen != sleep_screen && current_screen != low_battery_shutdown_screen && g_pan_connected) //如果当前满足了屏幕不活跃的时间，并且当前屏幕不是待机屏幕，当前屏幕不是开机启动屏幕，当前屏幕不是关机屏幕，当前屏幕不是睡眠屏幕
             {                       //加这些条件的限制是为了保证只有在对话界面才会进入休眠阶段
 
                 rt_kprintf("listen_tick\n");
@@ -2312,28 +2312,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             }
 
 #ifdef BSP_USING_PM
-            // if (strcmp(current_text, "聆听中...") == 0)
-            // {
-            //     lv_display_trigger_activity(NULL);
-            // }
-            // if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && g_pan_connected && she_bei_ma)
-            // {
-            //         lv_display_trigger_activity(NULL);
-            //         LOG_I("30s no action \n");
-            //         bt_interface_wr_link_policy_setting(
-            //         (unsigned char *)&g_bt_app_env.bd_addr,
-            //         BT_NOTIFY_LINK_POLICY_SNIFF_MODE | BT_NOTIFY_LINK_POLICY_ROLE_SWITCH); // open role switch
-            //         MCP_RGBLED_CLOSE();
-            //         rt_kprintf("time out,xiu_mian\n");
-            //         if (standby_screen) 
-            //         {
-            //             ui_swith_to_standby_screen();
 
-            //         }
-                
-            
-            // }
-        
             if (gui_is_force_close())
             {
                 LOG_I("in force_close");
