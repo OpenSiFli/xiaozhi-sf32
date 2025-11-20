@@ -83,7 +83,7 @@ static const char *hello_message =
 static lv_obj_t *countdown_screen = NULL;
 static rt_thread_t countdown_thread = RT_NULL;
 static bool  g_ota_verified = false;
-uint8_t shutdown_state = 1; 
+bool shutdown_state = true;
 
 typedef struct
 {
@@ -397,7 +397,7 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
         {
             rt_sem_release(g_activation_context.sem);
         }
-        shutdown_state = 0;
+        shutdown_state = false;
         gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
         rt_thread_mdelay(100);
         rt_mb_send(g_ui_task_mb, UI_EVENT_SHUTDOWN);

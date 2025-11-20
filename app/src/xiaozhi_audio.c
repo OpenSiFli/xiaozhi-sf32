@@ -831,9 +831,8 @@ void xz_audio_decoder_encoder_open(uint8_t is_websocket)
         thiz->mic = audio_open(AUDIO_TYPE_LOCAL_MUSIC, AUDIO_TXRX, &pa,
                                mic_callback, NULL);
         RT_ASSERT(thiz->mic);
-#if PKG_XIAOZHI_USING_AEC
+
         mic_gain_decrease(4);
-#endif
 
         thiz->speaker = thiz->mic;
         thiz->is_rx_enable = 1;   //麦克风常开

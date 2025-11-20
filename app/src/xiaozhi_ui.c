@@ -26,6 +26,7 @@
 #include "../kws/app_recorder_process.h"
 #include "../board/board_hardware.h"
 #include "xiaozhi_screen.h"
+#include "charge.h"
 
 #define UPDATE_REAL_WEATHER_AND_TIME 11
 #define LCD_DEVICE_NAME "lcd"
@@ -96,7 +97,9 @@ static uint32_t anim_tick = 0;
 static rt_device_t lcd_device;
 static lv_obj_t* charging_icon = NULL;
 static lv_obj_t* standby_charging_icon = NULL;
-static rt_timer_t charge_detect_timer = RT_NULL; 
+static volatile uint8_t g_charge_status_isr_pending = 0;
+static volatile uint8_t g_charge_status_isr_value = 0;
+
 
 lv_obj_t *cont = NULL;
 lv_timer_t *ui_sleep_timer = NULL;
@@ -125,14 +128,15 @@ extern date_time_t g_current_time;
 extern rt_mailbox_t g_bt_app_mb;
 extern const unsigned char droid_sans_fallback_font[];
 extern const int droid_sans_fallback_font_size;
-extern uint8_t shutdown_state;
+extern bool shutdown_state;
 extern lv_obj_t *shutdown_screen; 
 extern lv_obj_t *sleep_screen;
 extern lv_obj_t *low_battery_shutdown_screen;
 extern lv_obj_t *low_battery_warning_screen;
 extern lv_obj_t *g_startup_screen;
 extern bool g_skip_startup; 
-
+extern bool lowpower_shutdown_state;
+extern bool g_low_power_mode;
 
 static struct rt_semaphore update_ui_sema;
 
@@ -251,63 +255,31 @@ float get_scale_factor(void)
     return (scale_x < scale_y) ? scale_x : scale_y;
 }
 
-static void charge_detect_handler(void *parameter)
+static rt_err_t charger_event_callback(rt_device_t dev, rt_size_t size)
 {
-    rt_uint8_t current_status;
-    static int last_battery_level = -1;  // 记录上次的电量，初始化为-1确保第一次会更新
-    
-    current_status = rt_pin_read(CHARGE_DETECT_PIN);
-    
-    // 检查状态是否发生变化，或者电量在100%临界值发生变化
-    bool status_changed = (current_status != last_charge_status);
-    bool battery_critical_change = (last_battery_level < 100 && g_battery_level >= 100) || 
-                                  (last_battery_level >= 100 && g_battery_level < 100);
-
-    if (status_changed || battery_critical_change) 
+   rt_kprintf("charger event callback\n");
+    if (size == RT_CHARGE_EVENT_DETECT)
     {
-        last_charge_status = current_status;
-        last_battery_level = g_battery_level;
-        
-        if (current_status == PIN_HIGH) 
-        {
-            xiaozhi_ui_update_charge_status(PIN_HIGH);
-        } 
-        else 
-        {
-            xiaozhi_ui_update_charge_status(PIN_LOW);
-        }
+        /* 由于中断回调不能直接malloc 内存，所以只能通过全局变量的方式保存状态 */
+        rt_uint8_t status = rt_pin_read(CHARGE_DETECT_PIN);
+        g_charge_status_isr_value = status;
+        g_charge_status_isr_pending = 1;
+    }
+    return RT_EOK;
+}
+static void set_charge_icon()
+{
+    rt_uint8_t current_charge_status;
+    rt_err_t err = rt_charge_get_detect_status(&current_charge_status);
+    if (err == RT_EOK) 
+    {
+        xiaozhi_ui_update_charge_status(current_charge_status);
     } 
     else 
     {
-        // 更新电量记录
-        last_battery_level = g_battery_level;
+       rt_kprintf("Failed to get charge detect status\n");
     }
 }
-static int charge_detect_init(void)
-{
-    rt_pin_mode(CHARGE_DETECT_PIN, PIN_MODE_INPUT);  
-    last_charge_status = rt_pin_read(CHARGE_DETECT_PIN);
-    charge_detect_timer  = rt_timer_create("charge_detect", 
-                                          charge_detect_handler,
-                                          RT_NULL,
-                                          rt_tick_from_millisecond(800),
-                                          RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_SOFT_TIMER);
-    
-    if (charge_detect_timer != RT_NULL) 
-    {
-        rt_timer_start(charge_detect_timer);
-        xiaozhi_ui_update_charge_status(last_charge_status);
-        rt_kprintf("Charge detection initialized on PA44\n");
-        return 0;
-    } else 
-    {
-        rt_kprintf("Failed to create charge detection timer\n");
-        return -1;
-    }
-}
-
-
-
 void ctrl_wakeup(bool is_wakeup)
 {
     if (wakeup_switch != NULL) 
@@ -1499,22 +1471,13 @@ static void pm_event_handler(gui_pm_event_type_t event)
     {
         LOG_I("in GUI_PM_EVT_SUSPEND");
         lv_timer_enable(false);
-        // 停止充电检测定时器
-        if (charge_detect_timer != RT_NULL) 
-        {
-            rt_timer_stop(charge_detect_timer);
-            rt_kprintf("Charge detect timer stopped\n");
-        }
+        g_low_power_mode = true;
         break;
     }
     case GUI_PM_EVT_RESUME:
     {
-        // 重新启动充电检测定时器
-        if (charge_detect_timer != RT_NULL) 
-        {
-            rt_timer_start(charge_detect_timer);
-            rt_kprintf("Charge detect timer restarted\n");
-        }
+        
+        g_low_power_mode = false;
 
         if(update_time_ui_timer)
         {
@@ -1533,11 +1496,12 @@ static void pm_event_handler(gui_pm_event_type_t event)
             lv_timer_delete(ui_sleep_timer);
             ui_sleep_timer = NULL;
         }
-        if (shutdown_state) //如果是关机消息触发的唤醒，就不再切换到对话界面去了
+        if (shutdown_state && lowpower_shutdown_state) //如果是关机消息触发的唤醒，就不再切换到对话界面去了
         {
             rt_kprintf("恢复屏幕-> 对话\n");
             ui_switch_to_xiaozhi_screen();
-            shutdown_state = 1;
+            shutdown_state = TRUE;
+            lowpower_shutdown_state = TRUE;
         }
         if (!thiz->vad_enabled)
         {
@@ -1753,8 +1717,9 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
     {
         return;
     }
-
-    charge_detect_init(); // 初始化充电检测
+    
+    rt_charge_set_rx_ind(charger_event_callback); // 初始化充电检测
+    set_charge_icon();
 
     xiaozhi_ui_update_ble("close");
     xiaozhi_ui_chat_status("连接中...");
@@ -1792,7 +1757,13 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
     {
         rt_uint32_t btn_event;
         rt_uint32_t ui_event;
-
+        //先处理充电消息
+        if (g_charge_status_isr_pending)
+        {
+            uint8_t v = g_charge_status_isr_value;
+            g_charge_status_isr_pending = 0;
+            xiaozhi_ui_update_charge_status(v);
+        }
         if (g_kws_force_exit)
         {
             g_kws_force_exit = 0;
@@ -2310,9 +2281,6 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                 }
                 last_listen_tick = 0;
             }
-
-#ifdef BSP_USING_PM
-
             if (gui_is_force_close())
             {
                 LOG_I("in force_close");
@@ -2330,7 +2298,6 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                     lv_display_trigger_activity(NULL);
                 }
             }
-#endif // BSP_USING_PM
 
             rt_thread_mdelay(ms);
             rt_sem_release(&update_ui_sema);

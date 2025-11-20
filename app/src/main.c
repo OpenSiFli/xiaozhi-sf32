@@ -11,6 +11,7 @@
 #include "string.h"
 #include "xiaozhi_websocket.h"
 #include "./iot/iot_c_api.h"
+#include <stdbool.h>
 #ifdef BSP_USING_PM
     #include "gui_app_pm.h"
 #endif // BSP_USING_PM
@@ -31,6 +32,7 @@
 #include "bt_env.h"
 #include "ulog.h"
 #include "drv_gpio.h"
+#include "battery_calculator.h"
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -78,6 +80,8 @@ uint8_t Initiate_disconnection_flag = 0;//蓝牙主动断开标志
 rt_mailbox_t g_battery_mb;
 bool g_skip_startup = true; 
 bool low_battery_shutdown_triggered = true;
+bool lowpower_shutdown_state = true;
+bool g_low_power_mode = false;
 
 static rt_timer_t s_reconnect_timer = NULL;
 static rt_timer_t s_sleep_timer = NULL;
@@ -106,6 +110,8 @@ L2_RET_BSS_SECT_END
 static uint32_t
     battery_thread_stack[BATTERY_THREAD_STACK_SIZE / sizeof(uint32_t)] L2_RET_BSS_SECT(battery_thread_stack);
 #endif
+
+
 
 #ifdef BSP_USING_BOARD_SF32LB52_XTY_AI
 static rt_timer_t s_pulse_encoder_timer = NULL;
@@ -195,6 +201,24 @@ static void battery_level_task(void *parameter)
         rt_kprintf("Failed to create mailbox g_battery_mb\n");
         return;
     }
+    uint8_t battery_percentage = 0;
+    // 初始化电池计算器
+    battery_calculator_t battery_calc;
+    battery_calculator_config_t calc_config = 
+    {
+        .charging_table = charging_curve_table,
+        .charging_table_size = charging_curve_table_size,
+        .discharging_table = discharge_curve_table,
+        .discharging_table_size = discharge_curve_table_size,
+        .charge_filter_threshold = 50,      // 充电滤波阈值
+        .discharge_filter_threshold = 30,   // 放电滤波阈值
+        .filter_count = 3,                   // 滤波计数阈值
+        .secondary_filter_enabled = true,    // 启用二级滤波
+        .secondary_filter_weight_pre = 90,   // 二级滤波前电压权重
+        .secondary_filter_weight_cur = 10    // 二级滤波当前电压权重
+    };
+    
+    battery_calculator_init(&battery_calc, &calc_config);
     rt_uint8_t current_status;
     while (1)
     {
@@ -208,25 +232,31 @@ static void battery_level_task(void *parameter)
             LOG_E("Failed to enable ADC for battery read\n");
             return;
         }
-        rt_uint32_t battery_level =
-            rt_adc_read((rt_adc_device_t)battery_device, read_arg.channel);
+        rt_thread_mdelay(300);
+        rt_uint32_t battery_level = rt_adc_read((rt_adc_device_t)battery_device, read_arg.channel);
+        rt_kprintf("battery_level: %d\n", battery_level);
         rt_adc_disable((rt_adc_device_t)battery_device, read_arg.channel);
-
-        // 获取到的是电池电压，单位是mV
-        // 假设电池电压范围是3.6V到4.2V，对应的电量范围是0%到100%
-        uint32_t battery_percentage = 0;
-        if (battery_level < 36000)
+        if(!g_low_power_mode)
         {
-            battery_percentage = 0; // 小于3.6V，电量为0
-        }
-        else if (battery_level > 42000)
-        {
-            battery_percentage = 100; // 大于4.2V，电量为100
+            battery_percentage = battery_calculator_get_percent(
+                &battery_calc, 
+                battery_level
+            );
         }
         else
         {
-            // 线性插值计算电量百分比
-            battery_percentage = ((battery_level - 36000) * 100) / (42000 - 36000);
+            if (battery_level < 36000)
+            {
+                battery_percentage = 0; // 小于3.6V，电量为0
+            }
+            else if (battery_level > 42000)
+            {
+                battery_percentage = 100; // 大于4.2V，电量为100
+            }
+            else
+            {                
+                battery_percentage = ((battery_level - 36000) * 100) / (42000 - 36000);
+            }
         }
 
         rt_mb_send(g_battery_mb, battery_percentage);
@@ -240,12 +270,14 @@ static void battery_level_task(void *parameter)
                now_screen, sleep_screen, standby_screen);
             low_battery_shutdown_triggered = false;
             rt_kprintf("Low battery ,shutdown\n");
-            // 发送消息到UI线程显示低电量关机页面
+            //发送消息到UI线程显示低电量关机页面
             if (g_ui_task_mb != RT_NULL) 
             {
                 if(now_screen == sleep_screen && now_screen != NULL)
                 {
+                    lowpower_shutdown_state = false;
                     gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
+
                 }
                 
                 rt_thread_mdelay(100);
@@ -617,28 +649,37 @@ MSH_CMD_EXPORT(Write_MAC, write mac);
 void check_low_power(void)
 {
     rt_device_t battery_device = rt_device_find("bat1");
-    if (battery_device) {
+    if (battery_device) 
+    {
         rt_adc_cmd_read_arg_t read_arg;
         read_arg.channel = 7;
         rt_adc_enable((rt_adc_device_t)battery_device, read_arg.channel);
+        rt_thread_mdelay(300);
         rt_uint32_t battery_level = rt_adc_read((rt_adc_device_t)battery_device, read_arg.channel);
         rt_adc_disable((rt_adc_device_t)battery_device, read_arg.channel);
         
-        uint32_t battery_percentage = 0;
-        if (battery_level < 36000) {
-            battery_percentage = 0;
-        } else if (battery_level > 42000) {
-            battery_percentage = 100;
-        } else {
-            battery_percentage = ((battery_level - 36000) * 100) / (42000 - 36000);
-        }
+
+        battery_calculator_t battery_calc;
+        battery_calculator_config_t calc_config = 
+        {
+            .charging_table = charging_curve_table,
+            .charging_table_size = charging_curve_table_size,
+            .discharging_table = discharge_curve_table,
+            .discharging_table_size = discharge_curve_table_size,
+            .charge_filter_threshold = 50,      // 充电滤波阈值
+            .discharge_filter_threshold = 30,   // 放电滤波阈值
+            .filter_count = 3                   // 滤波计数阈值
+        }; 
+        battery_calculator_init(&battery_calc, &calc_config);
         
-        // 检查充电状态
-        rt_pin_mode(44, PIN_MODE_INPUT);
-        uint8_t charge_status = rt_pin_read(44);
         
+        uint8_t battery_percentage = battery_calculator_get_percent(
+            &battery_calc, 
+            battery_level
+        );
+        rt_uint8_t charge_status = rt_pin_read(CHARGE_DETECT_PIN);
         rt_kprintf("Boot battery check: %d%%, charging: %d\n", battery_percentage, charge_status);
-        
+
         // 如果低电量且未充电，进入低电量关机流程
         if (battery_percentage < LOW_BATTERY_THRESHOLD && !charge_status) 
         {
@@ -653,25 +694,26 @@ void check_low_power(void)
                                              XIAOZHI_UI_THREAD_STACK_SIZE,
                                              30,
                                              10);
-            if (result == RT_EOK) {
+            if (result == RT_EOK) 
+            {
                 rt_thread_startup(&xiaozhi_ui_thread);
             }
             
             g_ui_task_mb = rt_mb_create("ui_mb", 8, RT_IPC_FLAG_FIFO);
             rt_thread_mdelay(2000);
-            if (g_ui_task_mb != RT_NULL) {
+            if (g_ui_task_mb != RT_NULL) 
+            {
                 rt_mb_send(g_ui_task_mb, UI_EVENT_LOW_BATTERY_WARNING);
             }
             
-            while (1) {
+            while (1) 
+            {
                 rt_thread_mdelay(1000);
-
             }
         }
         rt_kprintf("电量充足，正常开机\n");
     }
 }
-
 int main(void)
 {
     check_poweron_reason();
@@ -691,6 +733,8 @@ int main(void)
     xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
     iot_initialize(); // Initialize iot
     xiaozhi_time_weather_init();// Initialize time and weather
+    //rt_pm_request(PM_SLEEP_MODE_IDLE);
+
 #ifdef XIAOZHI_USING_MQTT
 #else
     xz_ws_audio_init(); // 初始化音频
@@ -743,6 +787,9 @@ int main(void)
     {
         rt_kprintf("Failed to init battery thread\n");
     }
+
+
+
 #ifdef BSP_USING_BOARD_SF32LB52_XTY_AI
     if (pulse_encoder_init() != RT_EOK)
     {
