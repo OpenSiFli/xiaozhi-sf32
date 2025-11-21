@@ -43,7 +43,7 @@ jobs:
         . ./export.sh
         cd -
         cd app/project
-        scons --board=${{ matrix.target }} -j$(nproc)
+        scons --board=${{ matrix.target }} -j$(nproc) --board_search_path="../boards"
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
