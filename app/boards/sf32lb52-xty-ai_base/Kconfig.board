@@ -29,3 +29,18 @@ config PA_EN_LEVEL
 config PA_EN_PIN
     int "The pin number for the PA_EN control."
     default 26
+
+
+config LCD_HOR_RES_MAX
+    int
+    default 280
+
+
+config LCD_VER_RES_MAX
+    int
+    default 240
+
+
+config LCD_DPI
+    int
+    default 320 
