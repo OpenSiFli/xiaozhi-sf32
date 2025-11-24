@@ -74,6 +74,7 @@ extern const lv_image_dsc_t cdian2;
 extern const lv_image_dsc_t startup_logo;  //开机动画图标
 extern lv_obj_t *standby_screen;
 extern lv_obj_t *cont;
+extern lv_obj_t *update_confirm_popup;
 extern const lv_image_dsc_t no_power2;
 extern bool low_battery_shutdown_triggered;
 extern lv_obj_t *g_screen_before_low_battery;
@@ -474,6 +475,10 @@ static void startup_fadeout_ready_cb(struct _lv_anim_t* anim)
             lv_obj_set_parent(cont, lv_screen_active());
             lv_obj_move_foreground(cont);
         }
+        if (update_confirm_popup) {
+            lv_obj_set_parent(update_confirm_popup, lv_screen_active());
+        }
+        
     }
 }
 

@@ -13,7 +13,23 @@
                 "exec": "ftab"                
             }, 
             {
-                "offset": "0x00010000", 
+                "offset": "0x00008000",
+                "max_size": "0x00200000",
+                "tags": [
+                    "DFU_PAN_LOADER"
+                ],
+                "img": "dfu_pan",
+                "exec": "dfu_pan",
+                "ftab": {
+                    "name": "dfu_pan",
+                    "address": [
+                        "base",
+                        "xip"
+                    ]
+                }
+            },
+            {
+                "offset": "0x00208000", 
                 "max_size": "0x00010000", 
                 "tags": [
                     "FLASH_BOOT_LOADER"
@@ -27,7 +43,7 @@
                 "img": "bootloader"
             }, 
             {
-                "offset": "0x00020000", 
+                "offset": "0x00218000", 
                 "max_size": "0x00240000", 
                 "tags": [
                     "HCPU_FLASH_CODE"
@@ -43,30 +59,30 @@
                 "exec": "main"
             }, 
             {
-                "offset": "0x00260000", 
+                "offset": "0x00458000", 
                 "max_size": "0x00004000", 
                 "tags": [
                     "KVDB_DFU_REGION"
                 ]
             }, 
             {
-                "offset": "0x00264000", 
+                "offset": "0x0045C000", 
                 "max_size": "0x00004000", 
                 "tags": [
                     "KVDB_BLE_REGION"
                 ]
             },
             {
-                "offset": "0x00268000",
-                "max_size": "0x7C0000",
+                "offset": "0x00460000",
+                "max_size": "0x00680000",
                 "tags": [
                     "EZIP_IMAGE_DATA"
                 ],
                 "img": "main:ER_IROM3.bin"
             },
             {
-                "offset": "0x00A28000",
-                "max_size": "0x5D8000",
+                "offset": "0x00AE0000",
+                "max_size": "0x00400000",
                 "tags": [
                     "FONT_DATA"
                 ],

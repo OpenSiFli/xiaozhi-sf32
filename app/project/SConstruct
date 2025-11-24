@@ -38,6 +38,9 @@ objs = PrepareBuilding(env)
 # Build application.
 DoBuilding(TARGET, objs)
 
+# Add DFU_PAN OTA
+AddDFU_PAN(SIFLI_SDK)
+
 # Add flash table buld.
 AddFTAB(SIFLI_SDK,rtconfig.CHIP)
 
