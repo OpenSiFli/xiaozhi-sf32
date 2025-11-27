@@ -10,7 +10,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+#define VERSION "V1.3.5"
+#define OTA_QUERY_URL                                                          \
+    "https://ota.sifli.com/v2/xiaozhi/SF32LB52_ULP_NOR_TFT_CO5300/"            \
+    "S2_watch_sf32lb52-ulp"
 void xiaozhi_ui_update_ble(char *string); // ble
 void xiaozhi_ui_update_emoji(char *string);
 void xiaozhi_ui_chat_status(char *string);
@@ -26,6 +29,7 @@ void xiaozhi_ui_update_standby_emoji(char *string);
 void show_shutdown(void);
 void show_sleep_countdown_and_sleep(void);
 void xiaozhi_ui_update_charge_status(uint8_t is_charging);
+void xiaozhi_ui_update_latest_version(char *version);
 float get_scale_factor(void);
 
 extern const lv_image_dsc_t * angry[57];

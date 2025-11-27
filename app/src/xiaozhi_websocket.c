@@ -101,6 +101,28 @@ typedef struct
 static activation_context_t g_activation_context;
 static websocket_context_t g_websocket_context;
 
+//按键状态
+typedef enum
+{
+    KEYPAD_KEY_ENTER = 1,
+    KEYPAD_KEY_HOME = 2,
+    KEYPAD_KEY_ESC = 3,
+} keypad_key_code_t;
+
+typedef enum
+{
+    KEYPAD_KEY_STATE_REL,
+    KEYPAD_KEY_STATE_PRESSED,
+} keypad_key_state_t;
+
+typedef struct
+{
+    keypad_key_code_t last_key;
+    keypad_key_state_t last_key_state;
+} keypad_status_t;
+
+static keypad_status_t keypad_status = {0, KEYPAD_KEY_STATE_REL};
+
 
 void parse_helLo(const u8_t *data, u16_t len);
 
@@ -298,6 +320,11 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
 }
 void xiaozhi2(int argc, char **argv);
 
+extern lv_obj_t *update_confirm_popup;
+extern lv_obj_t *cancel_button;
+extern lv_obj_t *update_button;
+extern void xiaozhi_ui_update_confirm_button_event(BOOL is_update_button);
+
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
     rt_kprintf("in ws button handle\n");
@@ -320,6 +347,11 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
         lv_obj_t *now_screen = lv_screen_active();
         rt_kprintf("pressed\r\n");
         rt_kprintf("按键->对话");
+
+        // 检查是否弹窗显示中
+
+        xiaozhi_ui_update_confirm_button_event(1); // 模拟点击更新按钮
+
         if (now_screen == standby_screen)
         {
             ui_switch_to_xiaozhi_screen();
@@ -380,6 +412,9 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
     {
 
         rt_kprintf("xz_button2_event_handler - pressed\n");
+
+        xiaozhi_ui_update_confirm_button_event(0); // 模拟点击取消按钮
+
     }
     else if (action == BUTTON_LONG_PRESSED)
     {

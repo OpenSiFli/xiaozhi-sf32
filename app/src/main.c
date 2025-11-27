@@ -34,6 +34,7 @@
 #include "drv_gpio.h"
 #include "battery_calculator.h"
 #include "bt_pan_ota.h"
+
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -91,6 +92,8 @@ static uint8_t g_sleep_enter_flag = 0;    // 进入睡眠标志位
 // UI线程和battery线程控制块
 static struct rt_thread xiaozhi_ui_thread;
 static struct rt_thread battery_thread;
+// 最新版本信息
+extern char latest_version[32];
 
 
 //ui线程
@@ -857,7 +860,19 @@ int main(void)
             rt_thread_mdelay(2000);
             // 执行NTP与天气同步
             xiaozhi_time_weather();
-            //xiaozhi_ui_chat_output("连接小智中...");
+
+            //执行版本信息查询
+            int result = dfu_pan_query_versions(OTA_QUERY_URL, VERSION, latest_version, sizeof(latest_version));
+            rt_kprintf("OTA query result: %d, latest version: %s\n", result, latest_version);
+            // 根据返回值判断是否有更新
+            BOOL needs_update = (result > 0) ? RT_TRUE : RT_FALSE;
+
+            if (needs_update) 
+            {
+                //弹窗提示版本
+                xiaozhi_ui_update_latest_version(latest_version);
+            } 
+
             xiaozhi_ui_standby_chat_output("请按键连接小智...");
             lv_display_trigger_activity(NULL);
 
@@ -969,16 +984,12 @@ static void pan_cmd(int argc, char **argv)
 }
 MSH_CMD_EXPORT(pan_cmd, Connect PAN to last paired device);
 
-#define VERSION "v1.3.6"
-#define OTA_QUERY_URL                                                          \
-    "https://ota.sifli.com/v2/xiaozhi/SF32LB52_ULP_NOR_TFT_CO5300/"            \
-    "S2_watch_sf32lb52-ulp"
 
 static void dfu_pan_check_xz_cmd(int argc, char **argv)
 {
     LOG_I("Checking for new firmware version...");
 
-    int result = dfu_pan_query_versions(OTA_QUERY_URL, VERSION);
+    int result = dfu_pan_query_versions(OTA_QUERY_URL, VERSION, latest_version, sizeof(latest_version));
     //根据返回值判断是否有更新
     BOOL needs_update = (result > 0) ? RT_TRUE : RT_FALSE;
     
