@@ -203,6 +203,7 @@ static void battery_level_task(void *parameter)
         return;
     }
     uint8_t battery_percentage = 0;
+    uint8_t shutdown_battery_percentage = 0; 
     // 初始化电池计算器
     battery_calculator_t battery_calc;
     battery_calculator_config_t calc_config = 
@@ -237,32 +238,40 @@ static void battery_level_task(void *parameter)
         rt_uint32_t battery_level = rt_adc_read((rt_adc_device_t)battery_device, read_arg.channel);
         rt_kprintf("battery_level: %d\n", battery_level);
         rt_adc_disable((rt_adc_device_t)battery_device, read_arg.channel);
-        if(!g_low_power_mode)
+        if(g_low_power_mode)
+        {
+#ifdef BSP_USING_BOARD_SF32LB52_LCHSPI_ULP
+            BSP_GPIO_Set(26, 1, 1);
+            HAL_PIN_Set(PAD_PA26, GPIO_A26, PIN_PULLUP, 1);
+            HAL_PIN_Set(PAD_PA10, I2C2_SCL, PIN_PULLUP, 1);
+            HAL_PIN_Set(PAD_PA11, I2C2_SDA, PIN_PULLUP, 1);
+            rt_thread_mdelay(10);
+#endif
+            battery_percentage = battery_calculator_get_percent(
+                &battery_calc, 
+                battery_level
+            );
+#ifdef BSP_USING_BOARD_SF32LB52_LCHSPI_ULP
+            BSP_GPIO_Set(26, 0, 1);
+            HAL_PIN_Set(PAD_PA26, GPIO_A26, PIN_NOPULL, 1);
+            HAL_PIN_Set(PAD_PA10, GPIO_A10, PIN_PULLDOWN, 1);
+            HAL_PIN_Set(PAD_PA11, GPIO_A11, PIN_PULLDOWN, 1);
+#endif
+        }
+        else
         {
             battery_percentage = battery_calculator_get_percent(
                 &battery_calc, 
                 battery_level
             );
         }
-        else
-        {
-            if (battery_level < 36000)
-            {
-                battery_percentage = 0; // 小于3.6V，电量为0
-            }
-            else if (battery_level > 42000)
-            {
-                battery_percentage = 100; // 大于4.2V，电量为100
-            }
-            else
-            {                
-                battery_percentage = ((battery_level - 36000) * 100) / (42000 - 36000);
-            }
-        }
 
         rt_mb_send(g_battery_mb, battery_percentage);
         current_status = rt_pin_read(CHARGE_DETECT_PIN);
-        rt_kprintf("battery_percentage: %d, current_status: %d \n", battery_percentage, current_status);
+        rt_kprintf("battery_percentage: %d, current_status: %d: %d \n", battery_percentage, current_status);
+#ifdef LOW_POWER_NO_SHUTDOWN  //针对立创没有电池的板子
+
+#else
         //当电量低于阈值并且当前没有处于充电中并的时候
         if (battery_percentage < LOW_BATTERY_THRESHOLD && low_battery_shutdown_triggered && !current_status) 
         {
@@ -285,6 +294,7 @@ static void battery_level_task(void *parameter)
                 rt_mb_send(g_ui_task_mb, UI_EVENT_LOW_BATTERY_SHUTDOWN);
             }
         }
+#endif /* LOW_POWER_NO_SHUTDOWN */
         rt_thread_mdelay(5000);
     }
 }
@@ -727,8 +737,11 @@ int main(void)
     }
     //初始化电池邮箱
     g_battery_mb = rt_mb_create("battery_level", 1, RT_IPC_FLAG_FIFO);
-    check_low_power();
+#ifdef LOW_POWER_NO_SHUTDOWN  //针对立创没有电池的板子
 
+#else
+    check_low_power();
+#endif /* LOW_POWER_NO_SHUTDOWN */
     rt_kprintf("Xiaozhi start!!!\n");
     audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, VOL_DEFAULE_LEVEL); // 设置音量 
     xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
@@ -950,6 +963,7 @@ int main(void)
             xiaozhi_ui_standby_chat_output("请重启");//待机画面
         }
 #endif
+        rt_kprintf("main while loop\r\n");
     }
     return 0;
 }

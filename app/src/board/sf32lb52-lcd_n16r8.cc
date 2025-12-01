@@ -69,6 +69,8 @@ HAL_RAM_RET_CODE_SECT(PowerDownCustom, void PowerDownCustom(void))
     rt_kprintf("PowerDownCustom\n");
 
     BSP_LCD_PowerDown();
+    BSP_GPIO_Set(0, 0, 1);
+    BSP_GPIO_Set(37, 0, 1);
     HAL_PMU_SelectWakeupPin(0, HAL_HPAON_QueryWakeupPin(hwp_gpio1, BSP_KEY1_PIN)); //select PA34 to wake_pin0
     HAL_PMU_EnablePinWakeup(0, AON_PIN_MODE_HIGH);  //enable wake_pin0
     hwp_pmuc->WKUP_CNT = 0x50005;    //31-16bit:config PIN1 wake CNT , 15-0bit:PIN0 wake CNT

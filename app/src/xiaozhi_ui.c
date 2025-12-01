@@ -1261,11 +1261,12 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_align(g_battery_label, LV_ALIGN_CENTER, 0, 0);
     
  //充电图标       
-    charging_icon = lv_img_create(header_row);
+    // charging_icon = lv_img_create(header_row); // 原来是在header_row
+    charging_icon = lv_img_create(battery_outline); // 改为在电池框内
     lv_img_set_src(charging_icon, &cdian2);
     lv_obj_set_size(charging_icon, 32, 32);
     lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN); // 初始隐藏
-    lv_obj_align_to(charging_icon, battery_outline, LV_ALIGN_OUT_LEFT_MID, 0, 0);
+    lv_obj_align(charging_icon, LV_ALIGN_RIGHT_MID, 8, 0); // 电池框左侧，稍微有点间距
 
     // 插入右侧空白对象用于对称布局
     lv_obj_t *spacer_right = lv_obj_create(header_row);
