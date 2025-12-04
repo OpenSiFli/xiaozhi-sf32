@@ -439,7 +439,7 @@ char* build_ota_query_url(const char* chip_id)
              chip_id);
 #elif defined(BSP_USING_BOARD_SF32LB52_XTY_AI)
     snprintf(query_url, sizeof(query_url), 
-             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_ULP_XTY_AI_SPI_ST7789/sf32lb52-xty-ai?chip_id=%s&version=latest",
+             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_XTY_AI_SPI_ST7789/sf32lb52-xty-ai?chip_id=%s&version=latest",
              chip_id);
 #elif defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
     snprintf(query_url, sizeof(query_url), 
