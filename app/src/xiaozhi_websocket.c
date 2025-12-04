@@ -320,6 +320,11 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
         lv_obj_t *now_screen = lv_screen_active();
         rt_kprintf("pressed\r\n");
         rt_kprintf("按键->对话");
+
+        // 检查是否弹窗显示中
+
+        xiaozhi_ui_update_confirm_button_event(1); // 模拟点击更新按钮
+
         if (now_screen == standby_screen)
         {
             ui_switch_to_xiaozhi_screen();
@@ -380,6 +385,9 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
     {
 
         rt_kprintf("xz_button2_event_handler - pressed\n");
+
+        xiaozhi_ui_update_confirm_button_event(0); // 模拟点击取消按钮
+
     }
     else if (action == BUTTON_LONG_PRESSED)
     {

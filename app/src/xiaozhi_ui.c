@@ -29,10 +29,6 @@
 #include "charge.h"
 #include "bt_pan_ota.h"
 
-#define OTA_QUERY_URL                                                          \
-    "https://ota.sifli.com/v2/xiaozhi/SF32LB52_ULP_NOR_TFT_CO5300/"            \
-    "S2_watch_sf32lb52-ulp"
-
 #define UPDATE_REAL_WEATHER_AND_TIME 11
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
@@ -48,7 +44,6 @@
 #define BRT_TB_SIZE     (sizeof(brigtness_tb)/sizeof(brigtness_tb[0]))
 #define BASE_WIDTH 390
 #define BASE_HEIGHT 450
-#define VERSION "V1.3.5"
 // 默认oled电池图标尺寸
 #define OUTLINE_W 58
 #define OUTLINE_H 33
@@ -80,7 +75,9 @@ typedef enum {
     UI_MSG_VOLUME_UPDATE,  //更新下拉菜单里面的音量进度条
     UI_MSG_BRIGHTNESS_UPDATE,  //更新下拉菜单里面的亮度进度条
     UI_MSG_CHARGE_STATUS_CHANGED,
-    UI_MSG_SHOW_UPDATE_CONFIRM
+    UI_MSG_SHOW_UPDATE_CONFIRM,
+    UI_MSG_UPDATE_LATEST_VERSION,
+    UI_MSG_CONFIRM_BUTTON_EVENT
 
 } ui_msg_type_t;
 
@@ -248,10 +245,14 @@ static int g_battery_level = 60;        // 默认为满电
 static lv_obj_t *g_battery_fill = NULL;  // 电池填充对象
 static lv_obj_t *g_battery_label = NULL; // 电量标签
 
+// 更新确认弹框
 lv_obj_t *update_confirm_popup = NULL;
 static lv_obj_t *update_confirm_label = NULL;
-static lv_obj_t *update_button = NULL;
-static lv_obj_t *cancel_button = NULL;
+lv_obj_t *update_button = NULL;
+lv_obj_t *cancel_button = NULL;
+// 最新版本标签
+static lv_obj_t *latest_version_label = NULL;
+char latest_version[32] = {0};
 
 // 缩放因子计算
 float get_scale_factor(void)
@@ -736,7 +737,11 @@ static void update_switch_event_handler(struct _lv_event_t* e)
     if (strcmp(current_text, "检查更新") == 0) {
         lv_obj_set_style_bg_color(update_switch, lv_color_hex(0x90EE90), LV_PART_MAIN | LV_STATE_DEFAULT);
         // 调用OTA检查版本函数
-        int result = dfu_pan_query_versions(OTA_QUERY_URL, VERSION);
+        // 构建动态URL
+        char* chip_id = get_client_id();
+        char* dynamic_ota_url = build_ota_query_url(chip_id);
+        int result = dfu_pan_query_latest_version(
+            dynamic_ota_url, VERSION, latest_version, sizeof(latest_version));
         // 根据返回值判断是否有更新
         BOOL needs_update = (result > 0) ? RT_TRUE : RT_FALSE;
         LOG_D("OTA check result: %d", result);
@@ -766,13 +771,22 @@ static void update_confirm_button_event_handler(lv_event_t *e)
             if (update_confirm_popup) {
                 lv_obj_add_flag(update_confirm_popup, LV_OBJ_FLAG_HIDDEN);
             }
-            
+            // 在这里设置更新标志位
+            if (dfu_pan_set_update_flags() != 0)
+            {
+                LOG_E("Failed to mark versions for update");
+                return;
+            }
+
             // 执行OTA更新流程
             // 检查是否有需要更新的文件
             BOOL needs_update = RT_FALSE;
-            for (int i = 0; i < MAX_VERSION_COUNT; i++) {
-                struct version_info temp_version;
-                if (dfu_pan_get_version_info(i, &temp_version) == 0 && temp_version.needs_update) {
+            for (int i = 0; i < MAX_FIRMWARE_FILES; i++)
+            {
+                struct firmware_file_info temp_version;
+                if (dfu_pan_get_firmware_file_info(i, &temp_version) == 0 &&
+                    temp_version.needs_update)
+                {
                     needs_update = RT_TRUE;
                     break;
                 }
@@ -1167,7 +1181,7 @@ rt_err_t xiaozhi_ui_obj_init()
     row_dsc[3] = row_dsc[4] = CONT_H_PER(8);   // 第3、4行：各8%高度
     row_dsc[5] = CONT_H_PER(8);     // 第5行：8%高度
     row_dsc[6] = CONT_H_PER(8);     // 第6行：8%高度，用于版本号
-
+    row_dsc[7] = CONT_H_PER(8);               // 第7行：8%高度，用于新版本号
     cont = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(cont);
     lv_obj_set_style_grid_column_dsc_array(cont, col_dsc, 0);
@@ -1194,6 +1208,9 @@ rt_err_t xiaozhi_ui_obj_init()
     create_tip_label(cont, "检查更新" ,5, 0);
     update_switch = create_button(cont, update_switch_event_handler, "检查更新", 5, 2);
     create_tip_label(cont, VERSION, 6, 2);
+    create_tip_label(cont, "版本号:", 6, 0);
+    create_tip_label(cont, "新版本:", 7, 1);
+    latest_version_label = create_tip_label(cont, latest_version, 7, 2);
 
 // 创建弹框（初始隐藏）
     update_confirm_popup = lv_obj_create(lv_screen_active());
@@ -1658,6 +1675,56 @@ void xiaozhi_ui_update_confirm_popup(ui_msg_type_t type, BOOL needs_update)
                     LOG_E("Failed to send UI message");
                     rt_free(msg);
                 }
+            }
+        }
+    }
+}
+// 更新最新版本号显示的函数
+void xiaozhi_ui_update_latest_version(char *version)
+{
+    if (ui_msg_queue != RT_NULL)
+    {
+        ui_msg_t *msg = (ui_msg_t *)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL)
+        {
+            msg->type = UI_MSG_UPDATE_LATEST_VERSION;
+            msg->data = ui_strdup(version);
+            if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t *)) != RT_EOK)
+            {
+                LOG_E("Failed to send update latest version UI message");
+                rt_free(msg->data);
+                rt_free(msg);
+            }
+        }
+    }
+}
+
+// 用于发送模拟按钮更新确认弹框按钮事件的UI消息
+void xiaozhi_ui_update_confirm_button_event(bool is_update_button)
+{
+    if (ui_msg_queue != RT_NULL)
+    {
+        ui_msg_t *msg = (ui_msg_t *)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL)
+        {
+            msg->type = UI_MSG_CONFIRM_BUTTON_EVENT;
+            // 使用 data 字段存储按钮类型信息：1表示更新按钮，0表示取消按钮
+            msg->data = (char *)rt_malloc(sizeof(bool));
+            if (msg->data != RT_NULL)
+            {
+                memcpy(msg->data, &is_update_button, sizeof(bool));
+                if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t *)) !=
+                    RT_EOK)
+                {
+                    LOG_E("Failed to send update confirm button event UI "
+                          "message");
+                    rt_free(msg->data);
+                    rt_free(msg);
+                }
+            }
+            else
+            {
+                rt_free(msg);
             }
         }
     }
@@ -2415,34 +2482,94 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                     }
                     break;
                 case UI_MSG_SHOW_UPDATE_CONFIRM:
-                    if(msg->data) {
-                        BOOL needs_update = *((BOOL*)msg->data);
-                        LOG_D("UI_MSG_SHOW_UPDATE_CONFIRM\n");
+                    if (msg->data)
+                    {
+                        BOOL needs_update = *((BOOL *)msg->data);
+                            LOG_D("UI_MSG_SHOW_UPDATE_CONFIRM\n");
 
-                        // 显示弹框
-                        if (update_confirm_popup) {
+                            // 显示弹框
+                        if (update_confirm_popup)
+                        {
+                                
+                            lv_obj_remove_flag(update_confirm_popup,
+                                            LV_OBJ_FLAG_HIDDEN);
+                            }
                             
-                            lv_obj_remove_flag(update_confirm_popup, LV_OBJ_FLAG_HIDDEN);
+                            // 根据是否有更新设置弹框内容
+                        if (needs_update)
+                        {
+                                LOG_D("UI_MSG_SHOW_UPDATE_CONFIRM: needs_update\n");
+                                // 如果有新版本，显示更新提示和按钮
+                            if (update_confirm_label)
+                            {
+                                char update_text[32];
+                                snprintf(update_text, sizeof(update_text),
+                                        "发现新版本%s", latest_version);
+                                lv_label_set_text(update_confirm_label,
+                                                update_text);
+                                }
+                            if (update_button)
+                            {
+                                lv_obj_remove_flag(update_button,
+                                                LV_OBJ_FLAG_HIDDEN);
+                            }
                         }
-                        
-                        // 根据是否有更新设置弹框内容
-                        if (needs_update) { 
-                            LOG_D("UI_MSG_SHOW_UPDATE_CONFIRM: needs_update\n");
-                            // 如果有新版本，显示更新提示和按钮
-                            if (update_confirm_label) {
-                                lv_label_set_text(update_confirm_label, "发现新版本，是否更新？");
+                        else
+                        {
+                                LOG_D("UI_MSG_SHOW_UPDATE_CONFIRM: no update\n");    
+                                // 如果没有新版本，显示无需更新提示并隐藏更新按钮
+                            if (update_confirm_label)
+                            {
+                                lv_label_set_text(update_confirm_label,
+                                                "当前已是最新版本");
+                                }
+                            if (update_button)
+                            {
+                                lv_obj_add_flag(update_button,
+                                                LV_OBJ_FLAG_HIDDEN); // 隐藏更新按钮
                             }
-                            if (update_button) {
-                                lv_obj_remove_flag(update_button, LV_OBJ_FLAG_HIDDEN);
+                        }
+                    }
+                    break;
+                case UI_MSG_UPDATE_LATEST_VERSION:
+                    if (msg->data && latest_version_label)
+                    {
+                        lv_label_set_text(latest_version_label, msg->data);
+
+                        // 显示版本提示弹框
+                        if (update_confirm_popup)
+                        {
+                            char update_text[32];
+                            snprintf(update_text, sizeof(update_text),
+                                    "发现新版本%s", msg->data);
+                            lv_label_set_text(update_confirm_label, update_text);
+                            lv_obj_remove_flag(update_confirm_popup,
+                                            LV_OBJ_FLAG_HIDDEN);
+                        }
+                    }
+                    break;
+                case UI_MSG_CONFIRM_BUTTON_EVENT: 
+                    // 从消息数据中获取按钮类型
+                    BOOL is_update_button = *(BOOL *)msg->data;
+                    // 检查弹框是否已创建且可见
+                    if (update_confirm_popup && !lv_obj_has_flag(update_confirm_popup, LV_OBJ_FLAG_HIDDEN))
+                    {
+                        if (is_update_button)
+                        {
+                            // 模拟点击更新按钮
+                            if (update_button &&
+                                !lv_obj_has_flag(update_button, LV_OBJ_FLAG_HIDDEN))
+                            {
+                                lv_obj_send_event(update_button, LV_EVENT_CLICKED, NULL);
                             }
-                        } else {
-                            LOG_D("UI_MSG_SHOW_UPDATE_CONFIRM: no update\n");    
-                            // 如果没有新版本，显示无需更新提示并隐藏更新按钮
-                            if (update_confirm_label) {
-                                lv_label_set_text(update_confirm_label, "当前已是最新版本");
-                            }
-                            if (update_button) {
-                                lv_obj_add_flag(update_button, LV_OBJ_FLAG_HIDDEN);//隐藏更新按钮
+                        }
+                        else
+                        {
+                            // 模拟点击取消按钮
+                            if (cancel_button)
+                            {
+                                lv_obj_send_event(cancel_button, LV_EVENT_CLICKED,
+                                                NULL);
                             }
                         }
                     }

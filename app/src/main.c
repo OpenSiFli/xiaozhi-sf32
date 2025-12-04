@@ -91,6 +91,8 @@ static uint8_t g_sleep_enter_flag = 0;    // 进入睡眠标志位
 // UI线程和battery线程控制块
 static struct rt_thread xiaozhi_ui_thread;
 static struct rt_thread battery_thread;
+// 最新版本信息
+extern char latest_version[32];
 
 
 //ui线程
@@ -870,7 +872,32 @@ int main(void)
             rt_thread_mdelay(2000);
             // 执行NTP与天气同步
             xiaozhi_time_weather();
-            //xiaozhi_ui_chat_output("连接小智中...");
+
+
+            // 先进行设备注册
+            int reg_result = register_device_with_server();
+            if (reg_result != 0) {
+                rt_kprintf("Device registration failed, continuing with default chip_id\n");
+                // 如果注册失败，可以使用默认chip_id或者采取其他措施
+            }
+            // 获取动态chip_id并构建查询URL
+            char* chip_id = get_client_id();
+            char* dynamic_ota_url = build_ota_query_url(chip_id);
+            rt_kprintf("Dynamic chip_id: %s\n", chip_id);
+            rt_kputs(dynamic_ota_url);
+            rt_kprintf("\n");
+            //执行版本信息查询
+            int result = dfu_pan_query_latest_version(dynamic_ota_url, VERSION, latest_version, sizeof(latest_version));
+            rt_kprintf("OTA query result: %d, latest version: %s\n", result, latest_version);
+            // 根据返回值判断是否有更新
+            BOOL needs_update = (result > 0) ? RT_TRUE : RT_FALSE;
+
+            if (needs_update) 
+            {
+                //弹窗提示版本
+                xiaozhi_ui_update_latest_version(latest_version);
+            } 
+
             xiaozhi_ui_standby_chat_output("请按键连接小智...");
             lv_display_trigger_activity(NULL);
 
@@ -983,70 +1010,6 @@ static void pan_cmd(int argc, char **argv)
 }
 MSH_CMD_EXPORT(pan_cmd, Connect PAN to last paired device);
 
-#define VERSION "v1.3.6"
-#define OTA_QUERY_URL                                                          \
-    "https://ota.sifli.com/v2/xiaozhi/SF32LB52_ULP_NOR_TFT_CO5300/"            \
-    "S2_watch_sf32lb52-ulp"
-
-static void dfu_pan_check_xz_cmd(int argc, char **argv)
-{
-    LOG_I("Checking for new firmware version...");
-
-    int result = dfu_pan_query_versions(OTA_QUERY_URL, VERSION);
-    //根据返回值判断是否有更新
-    BOOL needs_update = (result > 0) ? RT_TRUE : RT_FALSE;
-    
-    if (needs_update) 
-    {
-        LOG_I("New firmware version available. Type 'go' to start update.");
-    } 
-    else 
-    {
-        LOG_I("No new firmware version available.");
-    }
-}
-MSH_CMD_EXPORT(dfu_pan_check_xz_cmd, Check for new firmware version);
-
-#define CUSTOM_OTA_MODE_REBOOT_TO_OTA 1
-static void dfu_pan_go_xz_cmd(int argc, char **argv)
-{
-    LOG_I("Starting OTA update process...");
-    xiaozhi_ui_chat_output("开始OTA更新");
-    xiaozhi_ui_standby_chat_output("准备更新固件...");
-    
-    // 检查是否有需要更新的文件
-    BOOL needs_update = RT_FALSE;
-    for (int i = 0; i < MAX_FIRMWARE_FILES; i++)
-    {
-        struct version_info temp_version;
-        if (dfu_pan_get_version_info(i, &temp_version) == 0 && temp_version.needs_update) 
-        {
-            needs_update = RT_TRUE;
-            break;
-        }
-    }
-    
-    if (!needs_update) 
-    {
-        LOG_I("No firmware files need update.");
-        xiaozhi_ui_chat_output("没有需要更新的固件");
-        xiaozhi_ui_standby_chat_output("无需更新");
-        return;
-    }
-    
-    LOG_I("System will reboot to OTA mode...");
-    xiaozhi_ui_chat_output("系统即将重启进入OTA模式");
-    xiaozhi_ui_standby_chat_output("正在重启...");
-    
-    // 延迟一段时间确保消息显示
-    rt_thread_mdelay(2000);
-    
-    // 重启系统
-    HAL_PMU_Reboot();
-}
-MSH_CMD_EXPORT(dfu_pan_go_xz_cmd, Start OTA update process);
-
-
 static void dfu_pan_finish_xz_cmd(int argc, char **argv)
 {
     dfu_pan_test_update_flags();
@@ -1059,3 +1022,31 @@ static void dfu_pan_print_files_xz_cmd(int argc, char **argv)
     dfu_pan_print_files();
 }
 MSH_CMD_EXPORT(dfu_pan_print_files_xz_cmd, Print OTA firmware files status);
+
+static void dfu_pan_check_dynamic_xz_cmd(int argc, char **argv)
+{
+    LOG_I("Checking for new firmware version with dynamic chip_id...");
+    
+    // 先注册设备
+    int reg_result = register_device_with_server();
+    if (reg_result != 0) {
+        LOG_W("Device registration failed");
+    }
+    
+    // 构建动态URL
+    char* chip_id = get_client_id();
+    char* dynamic_ota_url = build_ota_query_url(chip_id);
+    
+    // 查询最新版本
+    int result = dfu_pan_query_latest_version(dynamic_ota_url, VERSION, latest_version, sizeof(latest_version));
+    
+    // 根据返回值判断是否有更新
+    BOOL needs_update = (result > 0) ? RT_TRUE : RT_FALSE;
+    
+    if (needs_update) {
+        LOG_I("New firmware version %s available. Type 'go' to start update.", latest_version);
+    } else {
+        LOG_I("No new firmware version available.");
+    }
+}
+MSH_CMD_EXPORT(dfu_pan_check_dynamic_xz_cmd, Check for new firmware version with dynamic chip_id);

@@ -376,9 +376,79 @@ void xz_set_config_update(uint8_t en)
 
 
 
+// 设备注册函数
+int register_device_with_server(void)
+{
+    device_register_params_t reg_params = {0};
+    
+    // 填充注册参数
+    reg_params.mac = get_mac_address();
 
+#ifdef BSP_USING_BOARD_SF32LB52_LCD_N16R8
+    reg_params.model = "sf32lb52-lcd-n16r8";
+    reg_params.solution = "SF32LB52_LCD_N16R8_TFT_CO5300";
+#elif defined(BSP_USING_BOARD_SF32LB52_LCHSPI_ULP)
+    reg_params.model = "sf32lb52-lchspi-ulp";
+    reg_params.solution = "SF32LB52_ULP_NOR_TFT_CO5300";
+#elif defined(BSP_USING_BOARD_SF32LB52_NANO_52J)
+    reg_params.model = "sf32lb52-nano-52j";
+    reg_params.solution = "SF32LB52_NANO_52J_TFT_CO5300";
+#elif defined(BSP_USING_BOARD_SF32LB52_XTY_AI)
+    reg_params.model = "sf32lb52-xty-ai";
+    reg_params.solution = "SF32LB52_ULP_XTY_AI_SPI_ST7789";
+#elif defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
+    reg_params.model = "sf32lb52-xty-ai-tht";
+    reg_params.solution = "SF32LB52_XTY_AI_THT_SPI_ST7789";
+#endif
 
+    reg_params.version = VERSION; // 当前固件版本
+    reg_params.ota_version = VERSION;
+    reg_params.chip_id = get_client_id();
+    
+    // 服务器注册设备URL
+    const char* ota_server_url = "https://ota.sifli.com";
+    
+    // 执行设备注册
+    int result = dfu_pan_register_device(ota_server_url, &reg_params);
+    
+    if (result == 0) {
+        rt_kprintf("Device registered successfully with chip_id: %s\n", get_client_id());
+    } else {
+        rt_kprintf("Device registration failed\n");
+    }
+    
+    return result;
+}
 
+// 构建OTA查询URL
+char* build_ota_query_url(const char* chip_id)
+{
+    static char query_url[512] = {0};
+    
+#ifdef BSP_USING_BOARD_SF32LB52_LCD_N16R8
+    snprintf(query_url, sizeof(query_url), 
+             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_LCD_N16R8_TFT_CO5300/sf32lb52-lcd-n16r8?chip_id=%s&version=latest",
+             chip_id);
+#elif defined(BSP_USING_BOARD_SF32LB52_LCHSPI_ULP)
+    snprintf(query_url, sizeof(query_url), 
+             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_ULP_NOR_TFT_CO5300/sf32lb52-lchspi-ulp?chip_id=%s&version=latest",
+             chip_id);
+#elif defined(BSP_USING_BOARD_SF32LB52_NANO_52J)
+    snprintf(query_url, sizeof(query_url), 
+             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_NANO_52J_TFT_CO5300/sf32lb52-nano-52j?chip_id=%s&version=latest",
+             chip_id);
+#elif defined(BSP_USING_BOARD_SF32LB52_XTY_AI)
+    snprintf(query_url, sizeof(query_url), 
+             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_ULP_XTY_AI_SPI_ST7789/sf32lb52-xty-ai?chip_id=%s&version=latest",
+             chip_id);
+#elif defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
+    snprintf(query_url, sizeof(query_url), 
+             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_XTY_AI_THT_SPI_ST7789/sf32lb52-xty-ai-tht?chip_id=%s&version=latest",
+             chip_id);
+#endif
+    
+    return query_url;
+}
 
 
 
