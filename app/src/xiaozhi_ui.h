@@ -26,6 +26,8 @@ void xiaozhi_ui_update_standby_emoji(char *string);
 void show_shutdown(void);
 void show_sleep_countdown_and_sleep(void);
 void xiaozhi_ui_update_charge_status(uint8_t is_charging);
+void xiaozhi_ui_update_latest_version(char *version);
+void xiaozhi_ui_update_confirm_button_event(bool is_update_button);
 float get_scale_factor(void);
 
 extern const lv_image_dsc_t * angry[57];

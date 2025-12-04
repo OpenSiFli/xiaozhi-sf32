@@ -27,8 +27,8 @@
 #include "bt_connection_manager.h"
 #include "bt_env.h"
 #include "cJSON.h"
-
-
+#include "bt_pan_ota.h"
+#define VERSION "V1.3.5"
 
  #define XZ_DOWNLINK_QUEUE_NUM 128
  #define XZ_MIC_FRAME_LEN (320 * 6) // 60ms for 16k samplerate
@@ -123,5 +123,7 @@ void aec_set_enable(uint8_t enable);
 uint8_t xz_get_config_update(void);
 void xz_set_config_update(uint8_t en);
 ble_common_update_type_t ble_request_public_address(bd_addr_t *addr);
+int register_device_with_server(void);
+char* build_ota_query_url(const char* chip_id);
 
 #endif // XIAOZHI_PUBLIC_H
