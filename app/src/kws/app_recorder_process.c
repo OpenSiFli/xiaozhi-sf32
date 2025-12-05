@@ -95,6 +95,7 @@ void __2printf(const char *fmt, ...)
 void et_asr_up_vad_callback(s16_et *ptr, u32_et samples, u16_et idx)
 {
     // zai xian shi bie
+
 }
 
 void et_asr_up_wordstart(int ret)
@@ -104,7 +105,8 @@ void et_asr_up_wordstart(int ret)
 #endif //ET_LOG_DEBUG_EN
     if(ret == 3)
     {
-        audio_ioctl(instance.client, AUDIO_IOCTL_ENABLE_CPU_LOW_SPEED, (void *)0);
+        //rt_kprintf("AUDIO_IOCTL_ENABLE_CPU_LOW_SPEE 1 \n");
+        audio_ioctl(instance.client, AUDIO_IOCTL_ENABLE_CPU_LOW_SPEED, (void *)0); //退出低速模式
 		//clk_set("sys",PLL_240M_LIMIT);
         printf("sentence_start\n");
     }
@@ -123,7 +125,8 @@ void et_asr_up_wordend(int ret, u16_et voice_cnt)
 		//clk_set("sys",PLL_24M_LIMIT);
 		//clk_set("sys",PLL_48M_LIMIT);
     }
-    audio_ioctl(instance.client, AUDIO_IOCTL_ENABLE_CPU_LOW_SPEED, (void *)1);
+    //rt_kprintf("AUDIO_IOCTL_ENABLE_CPU_LOW_SPEE 2 \n");
+    //audio_ioctl(instance.client, AUDIO_IOCTL_ENABLE_CPU_LOW_SPEED, (void *)1);  //进入低速模式
 }
 
 
@@ -192,6 +195,7 @@ static void record_data_thread_callback(void *parameter)
         {
             rt_slist_t *list;
             LOG_I("kws evt stop\n");
+            //rt_kprintf("AUDIO_IOCTL_ENABLE_CPU_LOW_SPEE 3 \n");
             audio_ioctl(thiz->client, AUDIO_IOCTL_ENABLE_CPU_LOW_SPEED, (void *)0);
             audio_close(thiz->client);
             thiz->client = NULL;
@@ -258,6 +262,7 @@ static void record_data_thread_callback(void *parameter)
 LOG_I("---shouldl not coming here now\n");
 // RT_ASSERT(0);
 return;
+    //rt_kprintf("AUDIO_IOCTL_ENABLE_CPU_LOW_SPEE 4 \n");
     audio_ioctl(thiz->client, AUDIO_IOCTL_ENABLE_CPU_LOW_SPEED, (void *)0);
     audio_close(thiz->client);
     thiz->client = NULL;

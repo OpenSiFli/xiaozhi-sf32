@@ -36,6 +36,7 @@ void et_func_kws_event(int event)
 {
     #if 1
     if(event <=0 || event >=255) {
+        rt_kprintf("unknow event:%d\n", event);
         return;
     }
     #else
