@@ -16,7 +16,7 @@
                 "offset": "0x00008000",
                 "max_size": "0x00200000",
                 "tags": [
-                    "OTA_LOADER"
+                    "DFU_PAN_LOADER"
                 ],
                 "img": "dfu_pan",
                 "exec": "dfu_pan",
