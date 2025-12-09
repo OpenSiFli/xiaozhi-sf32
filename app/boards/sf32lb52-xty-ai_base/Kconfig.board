@@ -31,16 +31,35 @@ config PA_EN_PIN
     default 26
 
 
-config LCD_HOR_RES_MAX
-    int
-    default 280
+# LCD configuration
+if !BSP_USING_BUILTIN_LCD
+    config LCD_USING_ST7789
+        bool
+        default y
+
+    choice
+        prompt "Built-in LCD module driver"
+        default LCD_USING_SPI_ST7789
+
+        config LCD_USING_SPI_ST7789
+            bool "1.69 rect SPI LCD(240x280)"
+            select LCD_USING_ST7789
+            select BSP_LCDC_USING_SPI_DCX_1DATA
+
+    endchoice
+
+    config LCD_HOR_RES_MAX
+        int
+        default 280 if LCD_USING_SPI_ST7789
 
 
-config LCD_VER_RES_MAX
-    int
-    default 240
+    config LCD_VER_RES_MAX
+        int
+        default 240 if LCD_USING_SPI_ST7789
 
 
-config LCD_DPI
-    int
-    default 320 
+    config LCD_DPI
+        int
+        default 320 if LCD_USING_SPI_ST7789
+
+endif
