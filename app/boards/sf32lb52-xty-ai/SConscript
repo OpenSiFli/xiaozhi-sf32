@@ -9,6 +9,6 @@ path =  [cwd,
 group = DefineGroup('Drivers', src, depend = ['BSP_USING_BOARD_SF32LB52_XTY_AI'], CPPPATH = path)
 
 if GetDepend('BSP_USING_BOARD_SF32LB52_XTY_AI'):
-    group = group + SConscript(os.path.join(cwd, '../sf32lb52-xty-ai_base/SConscript.base'), variant_dir="base", duplicate=0)
+    group = group + SConscript(os.path.join(cwd, '../sf32lb52-xty-ai_base/SConscript'), variant_dir="base", duplicate=0)
 
 Return('group')
