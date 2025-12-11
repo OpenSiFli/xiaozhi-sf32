@@ -32,7 +32,7 @@ config PA_EN_PIN
 
 
 # LCD configuration
-if !BSP_USING_BUILTIN_LCD
+if !BSP_USING_BUILTIN_LCD && BF0_HCPU
     config LCD_USING_ST7789
         bool
         default y

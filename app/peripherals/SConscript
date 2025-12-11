@@ -13,7 +13,5 @@ if GetDepend(['BSP_USING_RTTHREAD']):
                 path = os.path.join(cwd, d)
                 if os.path.isfile(os.path.join(path, 'SConscript')):
                     objs = objs + SConscript(os.path.join(d, 'SConscript'))
-else:
-    objs = objs + SConscript(os.path.join('pmic_controller', 'SConscript'))
     
 Return('objs')

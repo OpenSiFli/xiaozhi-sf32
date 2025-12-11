@@ -23,7 +23,7 @@ objs.extend(SConscript(cwd+'/../asset/SConscript', variant_dir="asset", duplicat
 
 
 # Add peripherals source
-objs.extend(SConscript(cwd+'/../peripherals/SConscript', variant_dir="peripherals", duplicate=0))
+#objs.extend(SConscript(cwd+'/../peripherals/SConscript', variant_dir="peripherals", duplicate=0))
 
 #不同板子的硬件接口
 objs.extend(SConscript(cwd+'/../src/board/SConscript', variant_dir="hardware", duplicate=0))
