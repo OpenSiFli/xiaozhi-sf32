@@ -957,6 +957,18 @@ void xz_audio_decoder_encoder_close(void)
     rt_kprintf("xz_audio_decoder_encoder close out ok\n");
 }
 
+void reinit_audio()
+{
+    xz_audio_t *thiz = &xz_audio;
+    xz_aec_mic_close(thiz);
+    xz_speaker_close(thiz);
+    xz_audio_decoder_encoder_close();
+    // 重新打开音频解码器和编码器
+    xz_audio_decoder_encoder_open(1); 
+    xz_aec_mic_open(thiz);
+    xz_speaker_open(thiz);
+}
+
 void xz_audio_downlink(uint8_t *data, uint32_t size, uint32_t *aes_value,
                        uint8_t need_aes)
 {

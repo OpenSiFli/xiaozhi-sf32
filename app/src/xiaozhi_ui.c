@@ -77,7 +77,8 @@ typedef enum {
     UI_MSG_CHARGE_STATUS_CHANGED,
     UI_MSG_SHOW_UPDATE_CONFIRM,
     UI_MSG_UPDATE_LATEST_VERSION,
-    UI_MSG_CONFIRM_BUTTON_EVENT
+    UI_MSG_CONFIRM_BUTTON_EVENT,
+    UI_MSG_REINIT_AUDIO  
 
 } ui_msg_type_t;
 
@@ -1545,6 +1546,21 @@ void xiaozhi_ui_chat_status(char *string) // top text
     }
 }
 
+void xiaozhi_ui_reinit_audio(void)
+{
+    if (ui_msg_queue != RT_NULL) {
+        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
+        if (msg != RT_NULL) {
+            msg->type = UI_MSG_REINIT_AUDIO;
+            msg->data = RT_NULL;
+            if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) 
+            {
+                LOG_E("Failed to send reinit audio UI message");
+                rt_free(msg);
+            }
+        }
+    }
+}
 
 void xiaozhi_ui_standby_chat_output(char *string)
 {
@@ -2547,6 +2563,10 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                                             LV_OBJ_FLAG_HIDDEN);
                         }
                     }
+                    break;
+                case UI_MSG_REINIT_AUDIO:
+                    rt_kprintf("UI thread: reinitializing audio\n");
+                    reinit_audio();
                     break;
                 case UI_MSG_CONFIRM_BUTTON_EVENT: 
                     // 从消息数据中获取按钮类型
