@@ -65,15 +65,6 @@ config BT_NAME_MAC_ENABLE
     help
         Append the MAC address to the Bluetooth name, such as "sifli-pan-12:34:56:78:9a:bc".
 
-# 选择字体文件和路径
-menu "Font configuration"
-    config FONT_FILE
-        string "Font file path"
-        default "font/DroidSansFallback.ttf"
-        help
-            Specify the path to the font file used in the application.
-endmenu
-
 # KWS
 config KWS_ENABLE_DEFAULT
     bool "Enable KWS by default"
