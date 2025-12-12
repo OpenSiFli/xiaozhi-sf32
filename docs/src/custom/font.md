@@ -11,7 +11,7 @@ icon: font
 
 ![](image/2025-07-11-14-56-40.png)
 2. 修改成你要更换的字体文件名
-![](image/font1.png.png)
+![](image/font1.png)
 
 在这里，我们选择另一个自带的字体文件`庞门正道标题体.ttf`
 
