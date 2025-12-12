@@ -28,7 +28,7 @@
 #include "bt_env.h"
 #include "cJSON.h"
 #include "bt_pan_ota.h"
-#define VERSION "V1.3.5"
+#define VERSION "V1.4.0"
 
  #define XZ_DOWNLINK_QUEUE_NUM 128
  #define XZ_MIC_FRAME_LEN (320 * 6) // 60ms for 16k samplerate

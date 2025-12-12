@@ -3,7 +3,7 @@ import os
 font_objs = []  
 
 cwd = GetCurrentDir()
-font_file = os.path.join(cwd, '庞门正道标题体.ttf')
+font_file = os.path.join(cwd, 'DroidSansFallback.ttf')
 
 
 if not os.path.exists(font_file):
