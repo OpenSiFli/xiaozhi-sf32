@@ -88,7 +88,7 @@ git submodule update --init --recursive
 cd C:\xiaozhi-sf32\sdk
 set_env.bat gcc
 cd C:\xiaozhi-sf32\app\project
-scons --board=yellow_mountain --board_search_path="../boards" -j8
+scons --board=sf32lb52-lchspi-ulp --board_search_path="../boards" -j8
 ```
 
 ::: tip
