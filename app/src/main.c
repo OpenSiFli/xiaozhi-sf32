@@ -77,6 +77,7 @@ extern rt_mailbox_t g_ui_task_mb;
 extern lv_obj_t *call_screen;
 extern uint8_t s_talk_with_hfp;
 
+
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;
 BOOL g_pan_connected = FALSE;
