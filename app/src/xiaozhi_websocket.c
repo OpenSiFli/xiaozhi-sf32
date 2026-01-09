@@ -31,6 +31,7 @@
 #include "lv_tiny_ttf.h"
 #include "lv_obj.h"
 #include "lv_label.h"
+#include "lv_async.h"
 #include "lib_et_asr.h"
 #include "../weather/weather.h"
 #ifdef BSP_USING_PM
@@ -38,6 +39,7 @@
 #endif // BSP_USING_PM
 #include "xiaozhi_client_public.h"
 #include "xiaozhi_ui.h"
+#include "xiaozhi_screen.h"
 #include "xiaozhi_audio.h"
 
 #define MAX_WSOCK_HDR_LEN 4096
@@ -53,7 +55,7 @@ extern uint8_t Initiate_disconnection_flag;
 extern rt_mailbox_t g_ui_task_mb;
 extern rt_tick_t last_listen_tick;
 extern void pan_reconnect();
-
+extern lv_obj_t *call_screen;
 
 xiaozhi_ws_t g_xz_ws;
 rt_mailbox_t g_button_event_mb;
@@ -253,6 +255,8 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
         {
             rt_sem_release(g_xz_ws.sem);
             g_xz_ws.is_connected = 1;
+            // 安排在 LVGL 线程中刷新通话页面顶部文案
+            lv_async_call(xiaozhi_call_screen_update_connection_status_async, NULL);
         }
     }
     else if (code == WS_DISCONNECT)
@@ -285,6 +289,8 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
         }
         rt_kprintf("WebSocket closed\n");
         g_xz_ws.is_connected = 0;
+        // 安排在 LVGL 线程中刷新通话页面顶部文案
+        lv_async_call(xiaozhi_call_screen_update_connection_status_async, NULL);
     }
     else if (code == WS_TEXT)
     {
@@ -305,28 +311,22 @@ void xiaozhi2(int argc, char **argv);
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
     rt_kprintf("in ws button handle\n");
-    lv_display_trigger_activity(NULL);
-    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
-     rt_kprintf("in ws button handle2\n");
-    // 如果当前处于KWS模式，则退出KWS模式
-        if (g_kws_running) 
-        {  
-            rt_kprintf("KWS exit\n");
-            g_kws_force_exit = 1;
-        }
     static button_action_t last_action = BUTTON_RELEASED;
     if (last_action == action)
+    {
+        rt_kprintf("重复action : %d, return\n", action);
         return;
+    }
+    lv_display_trigger_activity(NULL);
+    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备    
     last_action = action;
 
     if (action == BUTTON_PRESSED)
     {
         lv_obj_t *now_screen = lv_screen_active();
-        rt_kprintf("pressed\r\n");
-        rt_kprintf("按键->对话");
+        rt_kprintf("按键->对话\n");
 
         // 检查是否弹窗显示中
-
         xiaozhi_ui_update_confirm_button_event(1); // 模拟点击更新按钮
 
         if (now_screen == standby_screen)
@@ -339,6 +339,12 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
         {
             rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
             xiaozhi_ui_chat_status("连接小智...");
+            // 如果当前处于KWS模式，则退出KWS模式
+            if (g_kws_running) 
+            {  
+                rt_kprintf("KWS exit\n");
+                g_kws_force_exit = 1;
+            }
         }
         else
         {
@@ -349,9 +355,6 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
     }
     else if (action == BUTTON_RELEASED)
     {
-#ifdef BSP_USING_PM
-        gui_pm_fsm(GUI_PM_ACTION_WAKEUP);
-#endif
         rt_kprintf("released\r\n");
         // 仅在已唤醒时发送停止监听
         if (g_xz_ws.is_connected)
@@ -508,7 +511,11 @@ void parse_helLo(const u8_t *data, u16_t len)
         xiaozhi_ui_update_emoji("neutral");
         xiaozhi_ui_update_standby_emoji("funny");
         rt_kprintf("hello->对话\n");
-        ui_switch_to_xiaozhi_screen();//切换到小智对话界面
+        //如果当前页面是通话界面，就不切换到对话界面了
+        if (lv_screen_active() != call_screen)
+        {
+            ui_switch_to_xiaozhi_screen();//切换到小智对话界面
+        }
 #ifdef PKG_XIAOZHI_USING_AEC
         ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id, kListeningModeAlwaysOn);
 #endif
@@ -527,7 +534,7 @@ void parse_helLo(const u8_t *data, u16_t len)
         xiaozhi_ui_chat_output(txt);
         last_listen_tick = rt_tick_get();
         web_g_state = kDeviceStateSpeaking;
-        xz_speaker(1);
+        //xz_speaker(1);
     }
     else if (strcmp(type, "tts") == 0)
     {
@@ -543,7 +550,7 @@ void parse_helLo(const u8_t *data, u16_t len)
                 web_g_state == kDeviceStateListening)
             {
                 web_g_state = kDeviceStateSpeaking;
-                xz_speaker(1); // 打开扬声器
+                //xz_speaker(1); // 打开扬声器
                 xiaozhi_ui_chat_status("讲话中...");
 
                 // 开始累计讲话时间
@@ -572,7 +579,7 @@ void parse_helLo(const u8_t *data, u16_t len)
             }
             
             web_g_state = kDeviceStateIdle;
-            xz_speaker(0); // 关闭扬声器
+            //xz_speaker(0); // 关闭扬声器
             xiaozhi_ui_chat_status("待命中...");
         }
         else if (strcmp(state, "sentence_start") == 0)

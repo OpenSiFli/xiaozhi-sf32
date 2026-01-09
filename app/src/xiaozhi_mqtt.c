@@ -29,8 +29,8 @@
 #include "./iot/iot_c_api.h"
 #include "./mcp/mcp_api.h"
 #include "xiaozhi_ui.h"
-
-
+#include "lv_async.h"
+#include "xiaozhi_screen.h"
 
 xiaozhi_context_t g_xz_context;
 
@@ -194,6 +194,8 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
         char *session_id = cJSON_GetObjectItem(root, "session_id")->valuestring;
         strncpy(ctx->session_id, session_id, 9);
         mqtt_g_state = kDeviceStateIdle;
+        // 安排在 LVGL 线程中刷新通话页面顶部文案
+        lv_async_call(xiaozhi_call_screen_update_connection_status_async, NULL);
         xz_audio_init();
         bt_interface_exit_sniff_mode(
         (unsigned char *)&g_bt_app_env.bd_addr); // exit sniff mode
@@ -210,7 +212,8 @@ void my_mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len,
     else if (strcmp(type, "goodbye") == 0)
     {
         mqtt_g_state = kDeviceStateUnknown;
-
+        // 安排在 LVGL 线程中刷新通话页面顶部文案
+        lv_async_call(xiaozhi_call_screen_update_connection_status_async, NULL);
         xiaozhi_ui_chat_output("等待唤醒...");
         xiaozhi_ui_chat_status("睡眠中...");
         xiaozhi_ui_update_emoji("sleep");
