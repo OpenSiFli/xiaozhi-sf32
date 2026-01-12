@@ -457,42 +457,54 @@ char* build_ota_query_url(const char* chip_id)
 
 void answer_phone()
 {
-    if(is_xiaozhi_phone == false)
+    if(!s_talk_with_hfp)
     {
-        rt_kprintf("不允许小智接电话 return\n");
-        bt_interface_audio_switch(1); //声音回到手机
-        return;
+        if(is_xiaozhi_phone == false)
+        {
+            rt_kprintf("不允许小智接电话 return\n");
+            bt_interface_audio_switch(1); //声音回到手机
+            return;
+        }
+        s_talk_with_hfp = 1;
+        bt_interface_audio_switch(0);    
+        lv_display_trigger_activity(NULL);
+        //将音频切换为小智
+        audio_server_select_public_audio_device(AUDIO_DEVICE_XIAOZHI);
+        lv_obj_t *now_screen = lv_screen_active();
+        if(now_screen == sleep_screen)
+        {
+            gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
+        }
+        // 切换到通话界面
+        ui_switch_to_call_screen();
     }
-    s_talk_with_hfp = 1;
-    bt_interface_audio_switch(0);    
-    lv_display_trigger_activity(NULL);
-    //将音频切换为小智
-    audio_server_select_public_audio_device(AUDIO_DEVICE_XIAOZHI);
-    lv_obj_t *now_screen = lv_screen_active();
-    if(now_screen == sleep_screen)
+    else
     {
-        gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
+        rt_kprintf("s_talk_with_hfp 状态不对: %d\n",s_talk_with_hfp);
     }
-    // 切换到通话界面
-    ui_switch_to_call_screen();
 
 }
 
 void hung_up_phone()
 {
-    
-    lv_display_trigger_activity(NULL);
-    //切换回默认音频
-    audio_server_select_public_audio_device(AUDIO_DEVICE_SPEAKER);
-    s_talk_with_hfp = 0;
-    // 如果当前处于KWS模式，则退出KWS模式
-    if (g_kws_running) 
-    {  
-        rt_kprintf("KWS exit\n");
-        g_kws_force_exit = 1;
+    if(s_talk_with_hfp)
+    {
+        lv_display_trigger_activity(NULL);
+        //切换回默认音频
+        audio_server_select_public_audio_device(AUDIO_DEVICE_SPEAKER);
+        s_talk_with_hfp = 0;
+        // 如果当前处于KWS模式，则退出KWS模式
+        if (g_kws_running) 
+        {  
+            rt_kprintf("KWS exit\n");
+            g_kws_force_exit = 1;
+        }
+        ui_switch_to_xiaozhi_screen();
     }
-    ui_switch_to_xiaozhi_screen();
-    
+    else
+    {
+        rt_kprintf("s_talk_with_hfp 状态不对: %d\n",s_talk_with_hfp);
+    }
 }
 
 
