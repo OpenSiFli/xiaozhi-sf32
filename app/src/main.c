@@ -74,7 +74,8 @@ extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
 extern rt_mailbox_t g_ui_task_mb;
-
+extern lv_obj_t *call_screen;
+extern uint8_t s_talk_with_hfp;
 
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;
@@ -472,11 +473,25 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
         case BT_NOTIFY_COMMON_SCO_CONNECTED:
         {
             rt_kprintf("SCO已建立,语音经本设备传输\n");
+            if(lv_screen_active() != call_screen && g_prev_call_status)  //保证打电话的时候只能通过 “接听” 的行为进行 开始 打电话
+            {
+                rt_kprintf("重新切换回打电话\n");
+                // 打电话
+                answer_phone();
+            }
+            
         }
         break;
         case BT_NOTIFY_COMMON_SCO_DISCONNECTED:
         {
             rt_kprintf("SCO已断开,语音路径回手机/原通道\n");
+            if(lv_screen_active() == call_screen)
+            {
+                rt_kprintf("切换为外放\n");
+                // 挂电话
+                hung_up_phone();
+            }
+
         }
         break;
         case BT_NOTIFY_COMMON_ACL_DISCONNECTED:
