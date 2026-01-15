@@ -30,6 +30,12 @@
 #include "charge.h"
 #include "bt_pan_ota.h"
 
+#ifdef EZIP_BINARY_MODE
+#include "xiaozhi_ezip_array.h"
+#else
+#include "xiaozhi_array.h"
+#endif
+
 #define UPDATE_REAL_WEATHER_AND_TIME 11
 #define LCD_DEVICE_NAME "lcd"
 #define TOUCH_NAME "touch"
@@ -169,13 +175,6 @@ extern const unsigned char xiaozhi_font[];
 extern const int xiaozhi_font_size;
 extern BOOL g_pan_connected;
 
-/*对话界面ble图片资源*/
-extern const lv_image_dsc_t ble; // ble
-extern const lv_image_dsc_t ble_close;
-
-/*充电图标 */
-extern const lv_image_dsc_t cdian2; 
-
 /*对话画面*/
 lv_obj_t *main_container;
 static lv_obj_t *header_row;
@@ -189,30 +188,6 @@ static lv_obj_t *seqimg;
 static lv_obj_t *global_img_ble;
 
 lv_font_t *font_medium;
-
-
-/*待机画面*/
-extern const lv_image_dsc_t ble_icon_img; // 蓝牙图标
-extern const lv_image_dsc_t ble_icon_img_close;
-extern const lv_image_dsc_t network_icon_img; // 网络图标
-extern const lv_image_dsc_t network_icon_img_close;
-extern const lv_image_dsc_t sunny;// 天气图标
-extern const lv_image_dsc_t strip;//天气栏
-extern const lv_image_dsc_t funny2; // 表情图标
-extern const lv_image_dsc_t sleepy2; // 表情图标
-extern const lv_image_dsc_t cool_gif;
-extern const lv_image_dsc_t calendar;//日历
-extern const lv_image_dsc_t second;
-extern const lv_image_dsc_t img_0;  // 数字图片资源
-extern const lv_image_dsc_t img_1;
-extern const lv_image_dsc_t img_2;
-extern const lv_image_dsc_t img_3;
-extern const lv_image_dsc_t img_4;
-extern const lv_image_dsc_t img_5;
-extern const lv_image_dsc_t img_6;
-extern const lv_image_dsc_t img_7;
-extern const lv_image_dsc_t img_8;
-extern const lv_image_dsc_t img_9;
 
 lv_obj_t *hour_tens_img;     // 小时十位数图片
 lv_obj_t *hour_units_img;    // 小时个位数图片
@@ -887,9 +862,13 @@ rt_err_t xiaozhi_ui_obj_init()
     #endif
 
     img_emoji = lv_img_create(standby_screen);
-    LV_IMAGE_DECLARE(sleepy2);
-    LV_IMAGE_DECLARE(funny2);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(img_emoji, "A:/sleepy2.ezip");//初始化提示小智还未连接
+#else
+    // 使用传统C数组模式
     lv_img_set_src(img_emoji, &sleepy2);//初始化提示小智还未连接
+#endif
     lv_obj_set_width(img_emoji, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(img_emoji, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(img_emoji, (int)(104 * g_scale));
@@ -900,8 +879,13 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_img_set_zoom(img_emoji, (int)(LV_SCALE_NONE * g_scale)); // 根据缩放因子缩放
 
     hour_tens_img = lv_img_create(standby_screen);
-    LV_IMAGE_DECLARE(img_1);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(hour_tens_img, "A:/time/img_1.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(hour_tens_img, &img_1);
+#endif
     lv_obj_set_width(hour_tens_img, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(hour_tens_img, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(hour_tens_img, (int)(-142 * g_scale));
@@ -912,8 +896,13 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_img_set_zoom(hour_tens_img, (int)(204 * g_scale));
 
     hour_units_img = lv_img_create(standby_screen);
-    LV_IMAGE_DECLARE(img_2);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(hour_units_img, "A:/time/img_2.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(hour_units_img, &img_2);
+#endif
     lv_obj_set_width(hour_units_img, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(hour_units_img, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(hour_units_img, (int)(-73 * g_scale));
@@ -924,9 +913,14 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_img_set_zoom(hour_units_img, (int)(204 * g_scale));
 
     minute_tens_img = lv_img_create(standby_screen);
-        LV_IMAGE_DECLARE(img_3);
 
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(minute_tens_img, "A:/time/img_3.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(minute_tens_img, &img_3);
+#endif
     lv_obj_set_width(minute_tens_img, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(minute_tens_img, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(minute_tens_img, (int)(-142 * g_scale));
@@ -937,9 +931,14 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_img_set_zoom(minute_tens_img, (int)(204 * g_scale));
 
     minute_units_img = lv_img_create(standby_screen);
-            LV_IMAGE_DECLARE(img_4);
 
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(minute_units_img, "A:/time/img_4.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(minute_units_img, &img_4);
+#endif
     lv_obj_set_width(minute_units_img, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(minute_units_img, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(minute_units_img, (int)(-73 * g_scale));
@@ -950,9 +949,14 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_img_set_zoom(minute_units_img, (int)(204 * g_scale));
 
     bluetooth_icon = lv_img_create(standby_screen);
-        LV_IMAGE_DECLARE(ble_icon_img);
 
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(bluetooth_icon, "A:/ble_icon_img.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(bluetooth_icon, &ble_icon_img);
+#endif
     lv_obj_set_width(bluetooth_icon, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(bluetooth_icon, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(bluetooth_icon, (int)(-134 * g_scale));
@@ -963,9 +967,14 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_img_set_zoom(bluetooth_icon, (int)(LV_SCALE_NONE * g_scale));
 
     network_icon = lv_img_create(standby_screen);
-        LV_IMAGE_DECLARE(network_icon_img);
 
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(network_icon, "A:/network_icon_img.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(network_icon, &network_icon_img);
+#endif
     lv_obj_set_width(network_icon, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(network_icon, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(network_icon, (int)(0 * g_scale));
@@ -997,7 +1006,13 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_align(battery_percent_label, LV_ALIGN_CENTER, 0, 0); // 在圆弧中心
 
     standby_charging_icon = lv_img_create(battery_arc);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(standby_charging_icon, "A:/cdian2.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(standby_charging_icon, &cdian2);
+#endif
     lv_obj_set_size(standby_charging_icon, 24, 24); // 设置合适的尺寸
     lv_obj_align(standby_charging_icon, LV_ALIGN_CENTER, 0, 0); // 在圆弧中心对齐
     lv_obj_add_flag(standby_charging_icon, LV_OBJ_FLAG_HIDDEN); // 初始隐藏
@@ -1005,8 +1020,13 @@ rt_err_t xiaozhi_ui_obj_init()
 
 //天气
     weather_bgimg = lv_img_create(standby_screen);
-    LV_IMAGE_DECLARE(strip);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(weather_bgimg, "A:/time/strip.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(weather_bgimg, &strip);
+#endif
     lv_obj_set_width(weather_bgimg, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(weather_bgimg, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(weather_bgimg, (int)(70 * g_scale));
@@ -1017,9 +1037,14 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_img_set_zoom(weather_bgimg, (int)(550 * g_scale));
 
     weather_icon = lv_img_create(standby_screen);
-    LV_IMAGE_DECLARE(sunny);
 
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(weather_icon, "A:/sunny.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(weather_icon, &sunny);
+#endif
     lv_obj_set_width(weather_icon, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(weather_icon, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(weather_icon, (int)(0 * g_scale));
@@ -1051,8 +1076,13 @@ rt_err_t xiaozhi_ui_obj_init()
 
 //日历
     ui_Image_calendar = lv_img_create(standby_screen);
-    LV_IMAGE_DECLARE(calendar);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(ui_Image_calendar, "A:/time/calendar.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(ui_Image_calendar, &calendar);
+#endif
     lv_obj_set_width(ui_Image_calendar, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_Image_calendar, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(ui_Image_calendar, (int)(-107 * g_scale));
@@ -1069,7 +1099,7 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_y(ui_Label_year, (int)(49 * g_scale));
     lv_obj_set_align(ui_Label_year, LV_ALIGN_CENTER);
     lv_label_set_text(ui_Label_year, "2025");
-        lv_obj_add_style(ui_Label_year, &style, 0);
+    lv_obj_add_style(ui_Label_year, &style, 0);
 
 
      ui_Label_day = lv_label_create(standby_screen);
@@ -1092,8 +1122,13 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_add_style(ui_Label_second, &style, 0);
 
     ui_Image_second = lv_img_create(standby_screen);
-    LV_IMAGE_DECLARE(second);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(ui_Image_second, "A:/time/second.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(ui_Image_second, &second);
+#endif
     lv_obj_set_width(ui_Image_second, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_Image_second, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(ui_Image_second, (int)(-7 * g_scale));
@@ -1112,11 +1147,6 @@ rt_err_t xiaozhi_ui_obj_init()
     lv_obj_set_align(ui_Label3, LV_ALIGN_CENTER);
     lv_obj_add_style(ui_Label3, &style2, 0);
     lv_label_set_text(ui_Label3, "等待连接");
-
-    LV_IMAGE_DECLARE(ble);
-    LV_IMAGE_DECLARE(cdian2);
-    LV_IMAGE_DECLARE(ble_close);
-
 
 
     // 创建主容器 - Flex Column，垂直排列
@@ -1167,7 +1197,13 @@ rt_err_t xiaozhi_ui_obj_init()
 
     // BLE 图标 - 左上角
     global_img_ble = lv_img_create(header_row);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(global_img_ble, "A:/ble.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(global_img_ble, &ble);
+#endif
     lv_obj_set_size(global_img_ble, SCALE_DPX(24), SCALE_DPX(24)); // 24dp 图标
     lv_img_set_zoom(global_img_ble,
                     (int)(LV_SCALE_NONE * g_scale)); // 根据缩放因子缩放
@@ -1312,7 +1348,13 @@ rt_err_t xiaozhi_ui_obj_init()
  //充电图标       
     // charging_icon = lv_img_create(header_row); // 原来是在header_row
     charging_icon = lv_img_create(battery_outline); // 改为在电池框内
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(charging_icon, "A:/cdian2.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(charging_icon, &cdian2);
+#endif
     lv_obj_set_size(charging_icon, 32, 32);
     lv_obj_add_flag(charging_icon, LV_OBJ_FLAG_HIDDEN); // 初始隐藏
     lv_obj_align(charging_icon, LV_ALIGN_RIGHT_MID, 8, 0); // 电池框左侧，稍微有点间距
@@ -1337,7 +1379,11 @@ rt_err_t xiaozhi_ui_obj_init()
 
     //gif  Emoji - 居中显示
     seqimg = lv_seqimg_create(img_container);
+#ifdef EZIP_BINARY_MODE
+    lv_seqimg_file_array(seqimg, angry_files, 57);
+#else
     lv_seqimg_src_array(seqimg, angry, 57);
+#endif
     lv_seqimg_set_period(seqimg, 30);          // 每帧间隔 100ms
     lv_obj_align(seqimg, LV_ALIGN_CENTER, 0, 0);
     lv_img_set_zoom(seqimg, (int)(LV_SCALE_NONE) * g_scale);
@@ -1984,7 +2030,11 @@ void xiaozhi_ui_task(void *args)
         const int adjusted_font_size = (int)(base_font_size * scale + 0.5f);
         
         lv_style_init(&style);
+        #if defined(TINY_TTF_MODE)
+        lv_font_t *font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", adjusted_font_size);
+        #else
         lv_font_t *font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, adjusted_font_size);
+        #endif
         lv_style_set_text_font(&style, font);
         lv_style_set_text_align(&style, LV_TEXT_ALIGN_CENTER);
         lv_style_set_text_color(&style, lv_color_hex(0xFFFFFF));
@@ -2019,9 +2069,11 @@ float scale = get_scale_factor();
 const int medium_font_size = (int)(25 * scale + 0.5f);    // 秒显示
 // 创建不同大小的字体并赋值给全局变量
 
-font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_font_size);
-
-
+    #if defined(TINY_TTF_MODE)
+    font_medium = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", medium_font_size);
+    #else
+    font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_font_size);
+    #endif
     g_scale = scale; // 保存全局缩放因子
     rt_kprintf("Scale factor: %.2f\n", scale);
     const int base_font_size = 30;
@@ -2037,8 +2089,11 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
  
 
     lv_style_init(&style);
-    lv_font_t *font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size,
-                                              adjusted_font_size);
+    #if defined(TINY_TTF_MODE)
+    lv_font_t *font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", adjusted_font_size);
+    #else
+    lv_font_t *font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, adjusted_font_size);
+    #endif
     lv_style_set_text_font(&style, font);
     lv_style_set_text_align(&style, LV_TEXT_ALIGN_CENTER);
     lv_style_set_text_color(&style, lv_color_hex(0xFFFFFF));
@@ -2185,14 +2240,26 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         {
                             if (img_emoji) 
                             {
+#ifdef EZIP_BINARY_MODE
+                                // 使用EZIP文件路径模式
+                                lv_img_set_src(img_emoji, "A:/sleepy2.ezip"); // 使用睡眠表情表示小智未连接
+#else
+                                // 使用传统C数组模式
                                 lv_img_set_src(img_emoji, &sleepy2); // 使用睡眠表情表示小智未连接
+#endif
                             }
                         }
                         else if (strcmp(msg->data, "funny") == 0)
                         {
                             if (img_emoji) 
                             {
+#ifdef EZIP_BINARY_MODE
+                                // 使用EZIP文件路径模式
+                                lv_img_set_src(img_emoji, "A:/funny2.ezip"); // 使用睡眠表情表示小智未连接
+#else
+                                // 使用传统C数组模式
                                 lv_img_set_src(img_emoji, &funny2); // 使用睡眠表情表示小智未连接
+#endif
                             }
                         }
                     }
@@ -2355,6 +2422,98 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                 case UI_MSG_UPDATE_EMOJI:
                     if(msg->data)
                     {
+#ifdef EZIP_BINARY_MODE
+                        // Use file arrays for ezip binary mode
+                        if (strcmp(msg->data, "neutral") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, neutral_files, sizeof(neutral_files) / sizeof(neutral_files[0]));
+                        }
+                        else if (strcmp(msg->data, "happy") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, funny_files, sizeof(funny_files) / sizeof(funny_files[0]));
+                        }
+                        else if (strcmp(msg->data, "laughing") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, funny_files, sizeof(funny_files) / sizeof(funny_files[0]));
+                        }
+                        else if (strcmp(msg->data, "funny") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, funny_files, sizeof(funny_files) / sizeof(funny_files[0]));
+                        }
+                        else if (strcmp(msg->data, "sad") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, crying_files, sizeof(crying_files) / sizeof(crying_files[0]));
+                        }
+                        else if (strcmp(msg->data, "angry") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, angry_files, sizeof(angry_files) / sizeof(angry_files[0]));
+                        }
+                        else if (strcmp(msg->data, "crying") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, crying_files, sizeof(crying_files) / sizeof(crying_files[0]));
+                        }
+                        else if (strcmp(msg->data, "loving") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, loving_files, sizeof(loving_files) / sizeof(loving_files[0]));
+                        }
+                        else if (strcmp(msg->data, "embarrassed") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, embarrassed_files, sizeof(embarrassed_files) / sizeof(embarrassed_files[0]));
+                        }
+                        else if (strcmp(msg->data, "surprised") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, surprised_files, sizeof(surprised_files) / sizeof(surprised_files[0]));
+                        }
+                        else if (strcmp(msg->data, "shocked") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, surprised_files, sizeof(surprised_files) / sizeof(surprised_files[0]));
+                        }
+                        else if (strcmp(msg->data, "thinking") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, thinking_files, sizeof(thinking_files) / sizeof(thinking_files[0]));
+                        }
+                        else if (strcmp(msg->data, "winking") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, loving_files, sizeof(loving_files) / sizeof(loving_files[0]));
+                        }
+                        else if (strcmp(msg->data, "cool") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, cool_files, sizeof(cool_files) / sizeof(cool_files[0]));
+                        }
+                        else if (strcmp(msg->data, "relaxed") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, cool_files, sizeof(cool_files) / sizeof(cool_files[0]));
+                        }
+                        else if (strcmp(msg->data, "delicious") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, loving_files, sizeof(loving_files) / sizeof(loving_files[0]));
+                        }
+                        else if (strcmp(msg->data, "kissy") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, kissy_files, sizeof(kissy_files) / sizeof(kissy_files[0]));
+                        }
+                        else if (strcmp(msg->data, "confident") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, cool_files, sizeof(cool_files) / sizeof(cool_files[0]));
+                        }
+                        else if (strcmp(msg->data, "sleepy") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, sleepy_files, sizeof(sleepy_files) / sizeof(sleepy_files[0]));
+                        }
+                        else if (strcmp(msg->data, "silly") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, thinking_files, sizeof(thinking_files) / sizeof(thinking_files[0]));
+                        }
+                        else if (strcmp(msg->data, "confused") == 0)
+                        {
+                            lv_seqimg_file_array(seqimg, thinking_files, sizeof(thinking_files) / sizeof(thinking_files[0]));
+                        }
+                        else
+                        {
+                            lv_seqimg_file_array(seqimg, neutral_files, sizeof(neutral_files) / sizeof(neutral_files[0])); // common emoji is neutral
+                        }
+#else
+                        // Use C arrays for traditional mode
                         if (strcmp(msg->data, "neutral") == 0)
                         {
                             lv_seqimg_src_array(seqimg, neutral, sizeof(neutral) / sizeof(neutral[0]));
@@ -2443,6 +2602,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         {
                             lv_seqimg_src_array(seqimg, neutral, sizeof(neutral) / sizeof(neutral[0])); // common emoji is neutral
                         }
+#endif
                     }
                     break;
                 case UI_MSG_UPDATE_BLE:
@@ -2450,11 +2610,23 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                     {
                         if (strcmp(msg->data, "open") == 0)
                         {
+#ifdef EZIP_BINARY_MODE
+                            // 使用EZIP文件路径模式
+                            lv_img_set_src(global_img_ble, "A:/ble.ezip");
+#else
+                            // 使用传统C数组模式
                             lv_img_set_src(global_img_ble, &ble);
+#endif
                         }
                         else if (strcmp(msg->data, "close") == 0)
                         {
+#ifdef EZIP_BINARY_MODE
+                            // 使用EZIP文件路径模式
+                            lv_img_set_src(global_img_ble, "A:/ble_close.ezip");
+#else
+                            // 使用传统C数组模式
                             lv_img_set_src(global_img_ble, &ble_close);
+#endif
                         }
                     }
                     break;

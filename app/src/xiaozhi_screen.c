@@ -28,6 +28,12 @@
 #include "xiaozhi_screen.h"
 #include "xiaozhi_mqtt.h"
 
+#ifdef EZIP_BINARY_MODE
+#include "xiaozhi_ezip_array.h"
+#else
+#include "xiaozhi_array.h"
+#endif
+
 #define SCALE_DPX(val) LV_DPX((val) * get_scale_factor())
 
 lv_obj_t *shutdown_screen = NULL; 
@@ -74,16 +80,11 @@ extern rt_timer_t update_weather_ui_timer;
 extern uint8_t aec_enabled;
 extern const unsigned char xiaozhi_font[];
 extern const int xiaozhi_font_size;
-extern const lv_image_dsc_t cdian2; 
-extern const lv_image_dsc_t startup_logo;  //开机动画图标
-extern const lv_image_dsc_t call_phone; //通话图标
-// 引入小智连接状态
 extern xiaozhi_ws_t g_xz_ws;
 extern xiaozhi_context_t g_xz_context;
 extern lv_obj_t *standby_screen;
 extern lv_obj_t *cont;
 extern lv_obj_t *update_confirm_popup;
-extern const lv_image_dsc_t no_power2;
 extern bool low_battery_shutdown_triggered;
 extern lv_obj_t *g_screen_before_low_battery;
 extern rt_mailbox_t g_bt_app_mb;
@@ -145,10 +146,17 @@ void show_sleep_countdown_and_sleep(void)
     const int tip_font_size = 36;
     const int big_font_size = 120;
 
+    #if defined(TINY_TTF_MODE)
+    if (!g_tip_font)
+        g_tip_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", tip_font_size);
+    if (!g_big_font)
+        g_big_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", big_font_size);
+    #else
     if (!g_tip_font)
         g_tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
     if (!g_big_font)
         g_big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, big_font_size);
+    #endif
 
     if (!sleep_screen) {
         sleep_screen = lv_obj_create(NULL);
@@ -277,10 +285,17 @@ void show_low_battery_shutdown(void)
     const int tip_font_size = 36;
     const int big_font_size = 120;
 
+    #if defined(TINY_TTF_MODE)
+    if (!g_tip_font)
+        g_tip_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", tip_font_size);
+    if (!g_big_font)
+        g_big_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", big_font_size);
+    #else
     if (!g_tip_font)
         g_tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
     if (!g_big_font)
         g_big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, big_font_size);
+    #endif
 
     if (!low_battery_shutdown_screen) {
         low_battery_shutdown_screen = lv_obj_create(NULL);
@@ -362,11 +377,18 @@ void show_shutdown(void)
     static lv_font_t *g_big_font = NULL;
     const int tip_font_size = 36;
     const int big_font_size = 120;
-
+    
+    #if defined(TINY_TTF_MODE)
+    if (!g_tip_font)
+        g_tip_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", tip_font_size);
+    if (!g_big_font)
+        g_big_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", big_font_size);
+    #else
     if (!g_tip_font)
         g_tip_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, tip_font_size);
     if (!g_big_font)
         g_big_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, big_font_size);
+    #endif
 
     if (!shutdown_screen) {
         shutdown_screen = lv_obj_create(NULL);
@@ -437,7 +459,13 @@ void show_low_battery_warning(void)
 
     // 使用 no_power2_map 图片
     lv_obj_t *low_power_img = lv_img_create(low_battery_warning_screen);
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(low_power_img, "A:/no_power2.ezip"   );
+#else
+    // 使用传统C数组模式    
     lv_img_set_src(low_power_img, &no_power2);
+#endif
     lv_obj_center(low_power_img); // 居中显示
 
     rt_kprintf("Low battery warning image displayed, 3 seconds to shutdown\n");
@@ -527,14 +555,6 @@ void show_startup_animation(void)
     g_startup_animation_active = 1;         // 设置标志
     
     rt_kprintf("Creating startup animation\n");
-    
-    // 检查startup_logo是否可用
-    if (&startup_logo == NULL) {
-        rt_kprintf("Warning: startup_logo not available, skipping animation\n");
-        g_startup_animation_finished = true;
-        g_startup_animation_active = 0;
-        return;
-    }
 
     // 创建全屏启动画面
     if (!g_startup_screen) {
@@ -570,7 +590,13 @@ void show_startup_animation(void)
         return;
     }
     
+#ifdef EZIP_BINARY_MODE
+    // 使用EZIP文件路径模式
+    lv_img_set_src(g_startup_img, "A:/startup_logo.ezip");
+#else
+    // 使用传统C数组模式
     lv_img_set_src(g_startup_img, &startup_logo);
+#endif
     lv_obj_center(g_startup_img); // 居中显示
     lv_obj_set_style_img_opa(g_startup_img, LV_OPA_0, 0); // 初始完全透明
     
@@ -604,9 +630,16 @@ void show_call_screen(void)
         lv_obj_set_style_bg_opa(call_screen, LV_OPA_COVER, 0);
         // 居中显示通话图标
         call_img = lv_img_create(call_screen);
-        lv_img_set_src(call_img, &call_phone);
-        lv_obj_center(call_img);
 
+        #ifdef EZIP_BINARY_MODE
+        // 使用EZIP文件路径模式
+        lv_img_set_src(call_img, "A:/call_phone.ezip");
+        #else
+        // 使用传统C数组模式    
+        lv_img_set_src(call_img, &call_phone);
+        #endif
+
+        lv_obj_center(call_img);
         // 顶部连接状态文字
         static lv_style_t style_call_title;
         lv_style_init(&style_call_title);

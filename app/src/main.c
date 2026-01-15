@@ -278,7 +278,7 @@ static void battery_level_task(void *parameter)
         rt_mb_send(g_battery_mb, battery_percentage);
         current_status = rt_pin_read(CHARGE_DETECT_PIN);
         rt_kprintf("battery_percentage: %d, current_status: %d: %d \n", battery_percentage, current_status);
-#ifdef LOW_POWER_NO_SHUTDOWN  //针对立创没有电池的板子
+#ifdef LOW_POWER_NO_SHUTDOWN  //针对没有电池的板子
 
 #else
         //当电量低于阈值并且当前没有处于充电中并的时候
@@ -323,15 +323,12 @@ void bt_app_connect_pan_timeout_handle(void *parameter)
     #include "dfs_file.h"
     #include "dfs_posix.h"
     #include "drv_flash.h"
-    #define NAND_MTD_NAME "root"
+    #define FS_ROOT "root"
 int mnt_init(void)
 {
     // TODO: how to get base address
-    register_nand_device(FS_REGION_START_ADDR & (0xFC000000),
-                         FS_REGION_START_ADDR -
-                             (FS_REGION_START_ADDR & (0xFC000000)),
-                         FS_REGION_SIZE, NAND_MTD_NAME);
-    if (dfs_mount(NAND_MTD_NAME, "/", "elm", 0, 0) == 0) // fs exist
+    register_mtd_device(FS_REGION_START_ADDR, FS_REGION_SIZE, FS_ROOT);
+    if (dfs_mount(FS_ROOT, "/", "elm", 0, 0) == 0) // fs exist
     {
         rt_kprintf("mount fs on flash to root success\n");
     }
@@ -339,10 +336,10 @@ int mnt_init(void)
     {
         // auto mkfs, remove it if you want to mkfs manual
         rt_kprintf("mount fs on flash to root fail\n");
-        if (dfs_mkfs("elm", NAND_MTD_NAME) == 0)
+        if (dfs_mkfs("elm", FS_ROOT) == 0)
         {
             rt_kprintf("make elm fs on flash sucess, mount again\n");
-            if (dfs_mount(NAND_MTD_NAME, "/", "elm", 0, 0) == 0)
+            if (dfs_mount(FS_ROOT, "/", "elm", 0, 0) == 0)
                 rt_kprintf("mount fs on flash success\n");
             else
                 rt_kprintf("mount to fs on flash fail\n");
