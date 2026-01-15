@@ -27,6 +27,7 @@
 #include "xiaozhi_mqtt.h"
 #include "xiaozhi_audio.h"
 #include "bts2_app_inc.h"
+#include "hfp_type_api.h"
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
 #include "bt_env.h"
@@ -34,6 +35,7 @@
 #include "drv_gpio.h"
 #include "battery_calculator.h"
 #include "bt_pan_ota.h"
+#include "charge.h"
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -41,13 +43,13 @@
  * @param  None
  * @retval None
  */
+static rt_tick_t s_last_cind_query_tick = 0; // 上次聚合查询触发时间
 /* User code start from here
  * --------------------------------------------------------*/
 
 #define BT_APP_READY 0
 #define BT_APP_CONNECT_PAN 1
 #define BT_APP_CONNECT_PAN_SUCCESS 2
-#define WEBSOC_RECONNECT 4
 #define KEEP_FIRST_PAN_RECONNECT 5
 #define XZ_CONFIG_UPDATE        6
 #define BT_APP_PHONE_DISCONNECTED 7    // 手机主动断开
@@ -58,8 +60,9 @@
 #define PAN_TIMER_MS 3000
 #define MQTT_RECONNECT 12
 
+
 #define MAX_RECONNECT_ATTEMPTS 30  // 30次尝试，每次1秒，共30秒
-#define XIAOZHI_UI_THREAD_STACK_SIZE (6144)
+#define XIAOZHI_UI_THREAD_STACK_SIZE (8192)
 #define BATTERY_THREAD_STACK_SIZE (2048)
 #define LOW_BATTERY_THRESHOLD 5
 
@@ -71,6 +74,8 @@ extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
 extern rt_mailbox_t g_ui_task_mb;
+extern lv_obj_t *call_screen;
+extern uint8_t s_talk_with_hfp;
 
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;
@@ -88,6 +93,9 @@ static rt_timer_t s_reconnect_timer = NULL;
 static rt_timer_t s_sleep_timer = NULL;
 static int reconnect_attempts = 0;
 static uint8_t g_sleep_enter_flag = 0;    // 进入睡眠标志位
+// HFP来电/通话状态跟踪
+static uint8_t g_prev_call_status = 0;       // 0: 无通话, 1: 通话中
+static uint8_t g_prev_callsetup_status = 0;  // 0: 无建立, 1: 来电, 2: 去电, 3: 响铃
 // UI线程和battery线程控制块
 static struct rt_thread xiaozhi_ui_thread;
 static struct rt_thread battery_thread;
@@ -196,7 +204,6 @@ void HAL_MspInit(void)
     BSP_IO_Init();
     set_pinmux();
 }
-
 static void battery_level_task(void *parameter)
 {
     if (g_battery_mb == NULL)
@@ -306,7 +313,9 @@ void bt_app_connect_pan_timeout_handle(void *parameter)
     LOG_I("bt_app_connect_pan_timeout_handle %x, %d", g_bt_app_mb,
           g_bt_app_env.bt_connected);
     if ((g_bt_app_mb != NULL) && (g_bt_app_env.bt_connected))
+    {
         rt_mb_send(g_bt_app_mb, BT_APP_CONNECT_PAN);
+    }
     return;
 }
 
@@ -393,6 +402,7 @@ static void start_reconnect_timer(void)
 
 
 
+
 void pan_reconnect()
 {
     static int first_reconnect_attempts = 0;
@@ -457,6 +467,30 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             LOG_I("BT_NOTIFY_COMMON_ACL_CONNECTED\n");
 			// 清除蓝牙主动断开标志位
             Initiate_disconnection_flag = 0;
+
+        }
+        break;
+        case BT_NOTIFY_COMMON_SCO_CONNECTED:
+        {
+            rt_kprintf("SCO已建立,语音经本设备传输\n");
+            if(lv_screen_active() != call_screen && g_prev_call_status)  //保证打电话的时候只能通过 “接听” 的行为进行 开始 打电话
+            {
+                rt_kprintf("重新切换回打电话\n");
+                // 打电话
+                answer_phone();
+            }
+            
+        }
+        break;
+        case BT_NOTIFY_COMMON_SCO_DISCONNECTED:
+        {
+            rt_kprintf("SCO已断开,语音路径回手机/原通道\n");
+            if(lv_screen_active() == call_screen)
+            {
+                rt_kprintf("切换为外放\n");
+                // 挂电话
+                hung_up_phone();
+            }
 
         }
         break;
@@ -614,6 +648,148 @@ static int bt_app_interface_event_handle(uint16_t type, uint16_t event_id,
             break;
         }
     }
+    else if (type == BT_NOTIFY_HFP_HF)
+    {
+        rt_kprintf("hfp_type=%d, event_id=%d\n", type, event_id);
+        switch (event_id)
+        {
+        case BT_NOTIFY_HF_PROFILE_CONNECTED: //0
+        {
+            bt_notify_profile_state_info_t *profile_info = (bt_notify_profile_state_info_t *)data;
+            if (data_len >= sizeof(bt_notify_profile_state_info_t))
+            {
+                rt_kprintf("HFP已连接: %02x:%02x:%02x:%02x:%02x:%02x (role=%d,res=%d)\n",
+                           profile_info->mac.addr[5], profile_info->mac.addr[4], profile_info->mac.addr[3],
+                           profile_info->mac.addr[2], profile_info->mac.addr[1], profile_info->mac.addr[0],
+                           profile_info->profile_role, profile_info->res);
+            }
+            else
+            {
+                rt_kprintf("HFP已连接\n");
+            }
+
+            // 连接建立后查询手机本机号码（AT+CNUM）
+            bt_interface_get_ph_num();
+            // 连接建立后主动查询一次聚合通话状态
+            bt_interface_get_remote_call_status();
+
+        }
+        break;
+        case BT_NOTIFY_HF_PROFILE_DISCONNECTED:  //1
+        {
+            rt_kprintf("HFP已断开\n");
+        }
+        break;
+        case BT_NOTIFY_HF_LOCAL_PHONE_NUMBER:  //4  查询本机号码 调用bt_interface_get_ph_num
+        {
+            if (data && data_len > 0)
+            {
+                char number[64];
+                int n = data_len;
+                if (n > (int)sizeof(number) - 1) n = sizeof(number) - 1;
+                memcpy(number, data, n);
+                number[n] = '\0';
+                rt_kprintf("本机号码: %s\n", number);
+            }
+        }
+        break;
+        case BT_NOTIFY_HF_VOLUME_CHANGE:  //6
+        {
+            rt_kprintf("HFP音量已改变\n");
+        }
+        break;
+        case BT_NOTIFY_HF_CALL_STATUS_UPDATE:  //7 通话状态更新
+        {
+            bt_notify_all_call_status *call_status = (bt_notify_all_call_status *)data;
+            if (data_len >= sizeof(bt_notify_all_call_status))
+            {
+                LOG_I("call_status=%d, callsetup_status=%d, callheld_status=%d",
+                      call_status->call_status,
+                      call_status->callsetup_status,
+                      call_status->callheld_status);
+
+                // 来电
+                if (g_prev_callsetup_status == 0 && call_status->call_status == 0 && call_status->callsetup_status != 0)
+                {
+                    
+                    if (call_status->callsetup_status == 1 || call_status->callsetup_status == 2)
+                    {
+                        rt_kprintf("来电...\n");
+                    }
+                    //answer_phone();
+                    
+                }
+
+                // 接听
+                if (g_prev_call_status == 0 && call_status->call_status == 1)
+                {
+                   
+                    answer_phone();
+                    rt_kprintf("已接听\n");
+                }
+
+                // 结束/挂断：
+                // 1) 活跃通话结束
+                if (g_prev_call_status == 1 && call_status->call_status == 0 && call_status->callsetup_status == 0)
+                {
+                    
+                    
+                    rt_kprintf("通话结束\n");
+                    hung_up_phone();
+                }
+                // 2) 建立阶段直接结束（未接/取消）
+                else if (g_prev_callsetup_status != 0 && call_status->callsetup_status == 0 && call_status->call_status == 0)
+                {
+                    rt_kprintf("已挂断\n");
+
+                    //hung_up_phone();
+                    
+                }
+
+                g_prev_call_status = call_status->call_status;
+                g_prev_callsetup_status = call_status->callsetup_status;
+            }
+        }
+        break;
+        case BT_NOTIFY_HF_REMOTE_CALL_INFO_IND:  //5 显示来电号码
+        {
+            bt_notify_clcc_ind_t *clcc_info = (bt_notify_clcc_ind_t *)data;
+            if (data_len >= sizeof(bt_notify_clcc_ind_t) && clcc_info->number_size > 0)
+            {
+                char buf[64];
+                int n = clcc_info->number_size;
+                if (n > (int)sizeof(buf) - 1) n = sizeof(buf) - 1;
+                memcpy(buf, clcc_info->number, n);
+                buf[n] = '\0';
+                rt_kprintf("来电号码: %s\n", buf);
+            }
+        }
+        break;
+        case BT_NOTIFY_HF_INDICATOR_UPDATE: // 8
+        {
+            if (data_len >= sizeof(bt_notify_cind_ind_t))
+            {
+                bt_notify_cind_ind_t *cind = (bt_notify_cind_ind_t *)data;
+                if (cind->type == HFP_AG_CIND_CALL_TYPE ||
+                    cind->type == HFP_AG_CIND_CALLSETUP_TYPE ||
+                    cind->type == HFP_AG_CIND_CALLHELD_TYPE)
+                {
+                    rt_tick_t now = rt_tick_get();
+                    if (s_last_cind_query_tick == 0 ||
+                        (now - s_last_cind_query_tick) >= rt_tick_from_millisecond(1000))
+                    {
+                        bt_interface_get_remote_call_status();
+                        s_last_cind_query_tick = now;
+                    }
+                }
+            }
+
+        }
+        break;
+        default:
+            break;
+        }
+    }
 
     return 0;
 }
@@ -744,6 +920,7 @@ int main(void)
 #else
     check_low_power();
 #endif /* LOW_POWER_NO_SHUTDOWN */
+    rt_charge_set_cc_current(100); //设置充电电流
     rt_kprintf("Xiaozhi start!!!\n");
     audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, VOL_DEFAULE_LEVEL); // 设置音量 
     xz_set_lcd_brightness(LCD_BRIGHTNESS_DEFAULT);
@@ -757,7 +934,9 @@ int main(void)
     xz_ws_button_init2();//初始化关机键
 
 #endif
+
     set_pinmux();
+
     // Create  xiaozhi UI
     rt_err_t result = rt_thread_init(&xiaozhi_ui_thread,
                                      "xz_ui",
