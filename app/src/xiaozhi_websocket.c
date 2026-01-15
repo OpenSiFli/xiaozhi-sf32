@@ -44,7 +44,7 @@
 
 #define MAX_WSOCK_HDR_LEN 4096
 #define WEBSOC_RECONNECT 4
-#define SPEAKING_THRESHOLD_MS (5 * 60 * 1000) // 小智讲话时间阈值 
+#define SPEAKING_THRESHOLD_MS (5 * 60 * 1000) // 小智讲话时间阈值
 
 extern BOOL g_pan_connected;
 extern xz_audio_t *thiz;
@@ -62,7 +62,7 @@ rt_mailbox_t g_button_event_mb;
 enum DeviceState web_g_state;
 
 #if defined(__CC_ARM) || defined(__CLANG_ARM)
-L2_RET_BSS_SECT_BEGIN(message) //6000地址
+L2_RET_BSS_SECT_BEGIN(message) // 6000地址
 static char message[256];
 L2_RET_BSS_SECT_END
 #else
@@ -85,7 +85,7 @@ static const char *hello_message =
 // 倒计时动画
 static lv_obj_t *countdown_screen = NULL;
 static rt_thread_t countdown_thread = RT_NULL;
-static bool  g_ota_verified = false;
+static bool g_ota_verified = false;
 bool shutdown_state = true;
 
 typedef struct
@@ -103,10 +103,9 @@ typedef struct
 
 static activation_context_t g_activation_context;
 static websocket_context_t g_websocket_context;
-static rt_tick_t g_speaking_start_tick = 0;  // 讲话开始时间
-static rt_tick_t g_total_speaking_time = 0;  // 累计讲话时间
-static bool g_is_speaking = false;           // 是否正在讲话
-
+static rt_tick_t g_speaking_start_tick = 0; // 讲话开始时间
+static rt_tick_t g_total_speaking_time = 0; // 累计讲话时间
+static bool g_is_speaking = false;          // 是否正在讲话
 
 void parse_helLo(const u8_t *data, u16_t len);
 
@@ -188,7 +187,7 @@ void ws_send_speak_abort(void *ws, char *session_id, int reason)
 
 void ws_send_listen_start(void *ws, char *session_id, enum ListeningMode mode)
 {
-    rt_kprintf("listen start,mode=%d\n",mode);
+    rt_kprintf("listen start,mode=%d\n", mode);
     rt_snprintf(message, 256,
                 "{\"session_id\":\"%s\",\"type\":\"listen\",\"state\":"
                 "\"start\",\"mode\":\"%s\"}",
@@ -256,7 +255,8 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
             rt_sem_release(g_xz_ws.sem);
             g_xz_ws.is_connected = 1;
             // 安排在 LVGL 线程中刷新通话页面顶部文案
-            lv_async_call(xiaozhi_call_screen_update_connection_status_async, NULL);
+            lv_async_call(xiaozhi_call_screen_update_connection_status_async,
+                          NULL);
         }
     }
     else if (code == WS_DISCONNECT)
@@ -279,10 +279,10 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
 
             xiaozhi_ui_chat_status("休眠中...");
             xiaozhi_ui_chat_output("请按键或语音唤醒");
-            xiaozhi_ui_standby_chat_output("小智已断开请按键唤醒");//待机界面
+            xiaozhi_ui_standby_chat_output("小智已断开请按键唤醒"); // 待机界面
             xiaozhi_ui_update_emoji("sleepy");
             xiaozhi_ui_update_standby_emoji("sleepy");
-            if(!g_pan_connected)
+            if (!g_pan_connected)
             {
                 ui_swith_to_standby_screen();
             }
@@ -318,7 +318,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
         return;
     }
     lv_display_trigger_activity(NULL);
-    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备    
+    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
     last_action = action;
 
     if (action == BUTTON_PRESSED)
@@ -333,15 +333,15 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
         {
             ui_switch_to_xiaozhi_screen();
         }
-    
+
         // 1. 检查是否处于睡眠状态（WebSocket未连接）
         if (!g_xz_ws.is_connected)
         {
             rt_mb_send(g_bt_app_mb, WEBSOC_RECONNECT); // 发送重连消息
             xiaozhi_ui_chat_status("连接小智...");
             // 如果当前处于KWS模式，则退出KWS模式
-            if (g_kws_running) 
-            {  
+            if (g_kws_running)
+            {
                 rt_kprintf("KWS exit\n");
                 g_kws_force_exit = 1;
             }
@@ -368,7 +368,7 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
 void simulate_button_pressed()
 {
     rt_kprintf("ws simulate_button_pressed pressed\r\n");
-    if(Initiate_disconnection_flag)//蓝牙主动断开不允许mic触发
+    if (Initiate_disconnection_flag) // 蓝牙主动断开不允许mic触发
     {
         rt_kprintf("Initiate_disconnection_flag\r\n");
         return;
@@ -378,7 +378,7 @@ void simulate_button_pressed()
 void simulate_button_released()
 {
     rt_kprintf("ws simulate_button_released released\r\n");
-    if(Initiate_disconnection_flag)
+    if (Initiate_disconnection_flag)
     {
         return;
     }
@@ -394,19 +394,18 @@ static void xz_button2_event_handler(int32_t pin, button_action_t action)
         rt_kprintf("xz_button2_event_handler - pressed\n");
 
         xiaozhi_ui_update_confirm_button_event(0); // 模拟点击取消按钮
-
     }
     else if (action == BUTTON_LONG_PRESSED)
     {
         // 按下超过3秒，触发关机
         rt_kprintf("xz_button2_event_handler - long pressed\n");
-        //检查设备是否已绑定设备码
-        // if (g_activation_context.is_activated)
-        // {
-        //     rt_sem_release(g_activation_context.sem);
-        // }
+        // 检查设备是否已绑定设备码
+        //  if (g_activation_context.is_activated)
+        //  {
+        //      rt_sem_release(g_activation_context.sem);
+        //  }
 
-            // 长按3秒，直接发送关机消息到ui_task
+        // 长按3秒，直接发送关机消息到ui_task
         lv_obj_t *now_screen = lv_screen_active();
         if (now_screen != standby_screen && g_activation_context.sem != RT_NULL)
         {
@@ -465,7 +464,6 @@ void xz_ws_audio_init()
     rt_kprintf("xz_audio_init\n");
     audio_server_set_private_volume(AUDIO_TYPE_LOCAL_MUSIC, 8); // 设置音量
     xz_audio_decoder_encoder_open(1); // 打开音频解码器和编码器
-
 }
 void parse_helLo(const u8_t *data, u16_t len)
 {
@@ -495,7 +493,7 @@ void parse_helLo(const u8_t *data, u16_t len)
         g_xz_ws.frame_duration = atoi(duration);
         strncpy(g_xz_ws.session_id, session_id, 9);
         web_g_state = kDeviceStateIdle;
-        
+
         rt_kprintf("exit sniff mode\n");
         bt_interface_exit_sniff_mode(
             (unsigned char *)&g_bt_app_env.bd_addr); // exit sniff mode
@@ -505,19 +503,20 @@ void parse_helLo(const u8_t *data, u16_t len)
 #ifndef CONFIG_IOT_PROTOCOL_MCP
         send_iot_descriptors(); // 发送iot描述
         send_iot_states();      // 发送iot状态
-#endif// CONFIG_IOT_PROTOCOL_MCP
+#endif                          // CONFIG_IOT_PROTOCOL_MCP
         xiaozhi_ui_chat_status("待命中...");
         xiaozhi_ui_chat_output("小智已连接!");
         xiaozhi_ui_update_emoji("neutral");
         xiaozhi_ui_update_standby_emoji("funny");
         rt_kprintf("hello->对话\n");
-        //如果当前页面是通话界面，就不切换到对话界面了
+        // 如果当前页面是通话界面，就不切换到对话界面了
         if (lv_screen_active() != call_screen)
         {
-            ui_switch_to_xiaozhi_screen();//切换到小智对话界面
+            ui_switch_to_xiaozhi_screen(); // 切换到小智对话界面
         }
 #ifdef PKG_XIAOZHI_USING_AEC
-        ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id, kListeningModeAlwaysOn);
+        ws_send_listen_start(&g_xz_ws.clnt, g_xz_ws.session_id,
+                             kListeningModeAlwaysOn);
 #endif
     }
     else if (strcmp(type, "goodbye") == 0)
@@ -534,7 +533,7 @@ void parse_helLo(const u8_t *data, u16_t len)
         xiaozhi_ui_chat_output(txt);
         last_listen_tick = rt_tick_get();
         web_g_state = kDeviceStateSpeaking;
-        //xz_speaker(1);
+        // xz_speaker(1);
     }
     else if (strcmp(type, "tts") == 0)
     {
@@ -550,7 +549,7 @@ void parse_helLo(const u8_t *data, u16_t len)
                 web_g_state == kDeviceStateListening)
             {
                 web_g_state = kDeviceStateSpeaking;
-                //xz_speaker(1); // 打开扬声器
+                // xz_speaker(1); // 打开扬声器
                 xiaozhi_ui_chat_status("讲话中...");
 
                 // 开始累计讲话时间
@@ -559,27 +558,31 @@ void parse_helLo(const u8_t *data, u16_t len)
             }
         }
         else if (strcmp(state, "stop") == 0)
-        {           
+        {
             // 计算本次讲话时间并累加
-            if (g_is_speaking) 
+            if (g_is_speaking)
             {
                 rt_tick_t current_tick = rt_tick_get();
-                rt_tick_t speaking_duration = current_tick - g_speaking_start_tick;
+                rt_tick_t speaking_duration =
+                    current_tick - g_speaking_start_tick;
                 g_total_speaking_time += speaking_duration;
                 g_is_speaking = false;
 
-                rt_kprintf("xiaozhi total_speaking_time: %d ticks\n", g_total_speaking_time);
+                rt_kprintf("xiaozhi total_speaking_time: %d ticks\n",
+                           g_total_speaking_time);
                 // 检查是否达到5分钟阈值
-                if (g_total_speaking_time >= rt_tick_from_millisecond(SPEAKING_THRESHOLD_MS)) 
+                if (g_total_speaking_time >=
+                    rt_tick_from_millisecond(SPEAKING_THRESHOLD_MS))
                 {
-                    rt_kprintf("Speaking time reached 5 minutes, reinitializing audio\n");
+                    rt_kprintf("Speaking time reached 5 minutes, "
+                               "reinitializing audio\n");
                     g_total_speaking_time = 0; // 重置累计时间
                     xiaozhi_ui_reinit_audio();
                 }
             }
-            
+
             web_g_state = kDeviceStateIdle;
-            //xz_speaker(0); // 关闭扬声器
+            // xz_speaker(0); // 关闭扬声器
             xiaozhi_ui_chat_status("待命中...");
         }
         else if (strcmp(state, "sentence_start") == 0)
@@ -663,16 +666,15 @@ void xiaozhi_ws_connect(void)
         she_bei_ma = 0;
         char str_temp[256];
         snprintf(str_temp, sizeof(str_temp),
-                "设备未添加，请前往 xiaozhi.me "
-                "输入绑定码: \n %s \n ",
-                g_activation_context.code);
+                 "设备未添加，请前往 xiaozhi.me "
+                 "输入绑定码: \n %s \n ",
+                 g_activation_context.code);
         xiaozhi_ui_chat_output(str_temp);
-        xiaozhi_ui_standby_chat_output(str_temp);//待机界面也显示一份
+        xiaozhi_ui_standby_chat_output(str_temp); // 待机界面也显示一份
         rt_sem_take(g_activation_context.sem, RT_WAITING_FOREVER);
         g_activation_context.is_activated = false;
         she_bei_ma = 1;
         lv_display_trigger_activity(NULL);
-        
     }
     // 检查 WebSocket 的 TCP 控制块状态是否为 CLOSED
     if (g_xz_ws.clnt.pcb != NULL && g_xz_ws.clnt.pcb->state != CLOSED)
@@ -821,29 +823,34 @@ void xiaozhi2(int argc, char **argv)
     char *my_ota_version;
     uint32_t retry = 10;
 
-        // 检查并重连蓝牙和PAN连接
-    if (!g_bt_app_env.bt_connected)   //未连接蓝牙               
+    // 检查并重连蓝牙和PAN连接
+    if (!g_bt_app_env.bt_connected) // 未连接蓝牙
     {
         xiaozhi_ui_chat_status("蓝牙连接中...");
         xiaozhi_ui_chat_output("正在重连蓝牙...");
-        rt_kprintf("Bluetooth not connected, attempting to reconnect Bluetooth\n");
+        rt_kprintf(
+            "Bluetooth not connected, attempting to reconnect Bluetooth\n");
 
         bt_interface_conn_ext((char *)&g_bt_app_env.bd_addr, BT_PROFILE_HID);
         // 等待蓝牙连接
         uint32_t bt_retry = 50; // 最多等待5秒 (50 * 100ms)
-        while (bt_retry-- > 0 && !g_bt_app_env.bt_connected) {
+        while (bt_retry-- > 0 && !g_bt_app_env.bt_connected)
+        {
             rt_thread_mdelay(100);
         }
     }
 
-    if (g_bt_app_env.bt_connected && !g_pan_connected) {  // 蓝牙已连接但PAN未连接
+    if (g_bt_app_env.bt_connected && !g_pan_connected)
+    { // 蓝牙已连接但PAN未连接
         xiaozhi_ui_chat_status("网络连接中...");
         xiaozhi_ui_chat_output("正在重连网络...");
-        rt_kprintf("Bluetooth connected but PAN not connected, attempting to reconnect PAN\n");
+        rt_kprintf("Bluetooth connected but PAN not connected, attempting to "
+                   "reconnect PAN\n");
         pan_reconnect();
         // 等待PAN连接
         uint32_t pan_retry = 50; // 最多等待5秒 (50 * 100ms)
-        while (pan_retry-- > 0 && !g_pan_connected) {
+        while (pan_retry-- > 0 && !g_pan_connected)
+        {
             rt_thread_mdelay(100);
         }
     }
@@ -857,7 +864,8 @@ void xiaozhi2(int argc, char **argv)
         return;
     }
     rt_kprintf("ota_ver:%d\n", g_ota_verified);
-    if (!g_ota_verified) {
+    if (!g_ota_verified)
+    {
         while (retry-- > 0)
         {
             xiaozhi_ui_chat_output("正在网络准备...");
@@ -866,22 +874,22 @@ void xiaozhi2(int argc, char **argv)
             {
                 rt_kprintf("my_ota_version = %s\n", my_ota_version);
                 parse_ota_response(my_ota_version, &g_activation_context,
-                                &g_websocket_context);
+                                   &g_websocket_context);
                 if (g_activation_context.is_activated)
                 {
                     she_bei_ma = 0;
                     char str_temp[256];
                     snprintf(str_temp, sizeof(str_temp),
-                            "设备未添加，请前往 xiaozhi.me "
-                            "输入绑定码: \n %s \n ",
-                            g_activation_context.code);
+                             "设备未添加，请前往 xiaozhi.me "
+                             "输入绑定码: \n %s \n ",
+                             g_activation_context.code);
                     xiaozhi_ui_chat_output(str_temp);
-                    xiaozhi_ui_standby_chat_output(str_temp);//待机界面也显示一份
+                    xiaozhi_ui_standby_chat_output(
+                        str_temp); // 待机界面也显示一份
                     rt_sem_take(g_activation_context.sem, RT_WAITING_FOREVER);
                     g_activation_context.is_activated = false;
                     she_bei_ma = 1;
                     lv_display_trigger_activity(NULL);
-                    
                 }
 
                 // OTA验证成功，设置标志
@@ -908,9 +916,8 @@ void xiaozhi2(int argc, char **argv)
     else
     {
         rt_kprintf("OTA verification skipped, already verified\n");
-
     }
-                xiaozhi_ws_connect();
+    xiaozhi_ws_connect();
 }
 MSH_CMD_EXPORT(xiaozhi2, Get Xiaozhi)
 
