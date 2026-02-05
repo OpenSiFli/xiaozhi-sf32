@@ -15,7 +15,6 @@
 #include "drv_flash.h"
 #include "xiaozhi_websocket.h"
 #include "bts2_app_inc.h"
-#include "bts2_app_interface.h"
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
 #include "bt_env.h"
@@ -71,7 +70,6 @@ typedef enum {
     UI_MSG_STANDBY_EMOJI,
     UI_MSG_SWITCH_TO_STANDBY,
     UI_MSG_SWITCH_TO_MAIN,
-    UI_MSG_SWITCH_TO_CALL,
     UI_MSG_UPDATE_WEATHER_AND_TIME,
     UI_MSG_STANDBY_CHAT_OUTPUT,
     UI_MSG_VOLUME_UPDATE,  //更新下拉菜单里面的音量进度条
@@ -94,7 +92,6 @@ rt_mq_t ui_msg_queue = RT_NULL;
 
 static lv_obj_t* wakeup_switch = NULL;
 static lv_obj_t* interrupt_switch = NULL;
-static lv_obj_t* handsfree_switch = NULL;
 static lv_timer_t* standby_update_timer = NULL;
 static rt_timer_t bg_update_timer = NULL;
 static rt_timer_t g_split_text_timer = RT_NULL;
@@ -117,7 +114,6 @@ rt_tick_t last_listen_tick = 0;
 uint8_t vad_enable = 1;      //0是支持打断，1是不支持打断
 uint8_t last_charge_status = 0; // 上次充电状态
 lv_obj_t *g_screen_before_low_battery = NULL; //记录低电量关机前的页面
-bool is_xiaozhi_phone = false; //默认不允许小智接电话
 
 #if defined (KWS_ENABLE_DEFAULT) && KWS_ENABLE_DEFAULT
 uint8_t aec_enabled = 1;
@@ -142,12 +138,9 @@ extern lv_obj_t *sleep_screen;
 extern lv_obj_t *low_battery_shutdown_screen;
 extern lv_obj_t *low_battery_warning_screen;
 extern lv_obj_t *g_startup_screen;
-extern lv_obj_t *call_screen;
 extern bool g_skip_startup; 
 extern bool lowpower_shutdown_state;
 extern bool g_low_power_mode;
-extern uint8_t s_talk_with_hfp;
-extern void simulate_button_released(void);
 
 static struct rt_semaphore update_ui_sema;
 
@@ -693,29 +686,6 @@ static void aec_switch_event_handler(struct _lv_event_t* e)
     rt_kprintf("aec_status: %d\n", aec_enabled);
 }
 
-// 免提(HFP音频路由)开关：开=走设备SCO，关=回手机
-static void hfp_handsfree_switch_event_handler(struct _lv_event_t* e)
-{
-    lv_obj_t * obj = lv_event_get_current_target(e);
-    bool on = lv_obj_has_state(obj, LV_STATE_CHECKED);
-    // type: 0=create(connect) audio, 1=close(disconnect) audio
-    if (on)
-    {
-        // 尝试建立SCO，让通话从设备播放
-        is_xiaozhi_phone = true; //允许小智接电话
-
-        //bt_interface_audio_switch(0);
-        rt_kprintf("允许小智接电话\n");
-    }
-    else
-    {
-        is_xiaozhi_phone = false; //不允许小智接电话
-        // 断开SCO，让音频回到手机A
-        //bt_interface_audio_switch(1);
-        rt_kprintf("不允许小智接电话\n");
-    }
-}
-
 static void slider_event_handler(struct _lv_event_t* e)
 {
     lv_obj_t* slider = lv_event_get_current_target_obj(e);
@@ -1236,8 +1206,7 @@ rt_err_t xiaozhi_ui_obj_init()
     volume_slider = create_slider(cont, slider_event_handler, 3, 1, VOL_MIN_LEVEL, VOL_MAX_LEVEL, VOL_DEFAULE_LEVEL);
     create_tip_label(cont, "亮度", 4, 0);
     brightness_lines = create_lines(cont, line_event_handler, 4, 1, BRT_TB_SIZE, LCD_BRIGHTNESS_DEFAULT);
-    create_tip_label(cont, "代理", 5, 0);
-    handsfree_switch = create_switch(cont, hfp_handsfree_switch_event_handler, 5, 1, 0);
+    create_tip_label(cont, "检查更新" ,5, 0);
     update_switch = create_button(cont, update_switch_event_handler, "检查更新", 5, 2);
     create_tip_label(cont, VERSION, 6, 2);
     create_tip_label(cont, "版本号:", 6, 0);
@@ -1503,21 +1472,6 @@ void ui_switch_to_xiaozhi_screen(void)
                       }
                   }
               }
-}
-
-void ui_switch_to_call_screen(void)
-{
-    if (ui_msg_queue != RT_NULL) {
-        ui_msg_t* msg = (ui_msg_t*)rt_malloc(sizeof(ui_msg_t));
-        if (msg != RT_NULL) {
-            msg->type = UI_MSG_SWITCH_TO_CALL;
-            msg->data = RT_NULL;
-            if (rt_mq_send(ui_msg_queue, &msg, sizeof(ui_msg_t*)) != RT_EOK) {
-                LOG_E("Failed to send switch to CALL UI message");
-                rt_free(msg);
-            }
-        }
-    }
 }
 
 
@@ -1827,7 +1781,7 @@ static void pm_event_handler(gui_pm_event_type_t event)
             lv_timer_delete(ui_sleep_timer);
             ui_sleep_timer = NULL;
         }
-        if (shutdown_state && lowpower_shutdown_state && !s_talk_with_hfp) //如果是关机消息 和 通话界面按键 触发的唤醒，就不再切换到对话界面去了
+        if (shutdown_state && lowpower_shutdown_state) //如果是关机消息触发的唤醒，就不再切换到对话界面去了
         {
             rt_kprintf("恢复屏幕-> 对话\n");
             ui_switch_to_xiaozhi_screen();
@@ -1836,13 +1790,10 @@ static void pm_event_handler(gui_pm_event_type_t event)
         }
         if (!thiz->vad_enabled)
         {
-            if(!s_talk_with_hfp)
-            {
-                thiz->vad_enabled = true;
-                xz_aec_mic_open(thiz);
-                rt_kprintf("PM resume: mic reopened\n");
-            }
-                 
+            thiz->vad_enabled = true;
+            xz_aec_mic_open(thiz);
+            rt_kprintf("PM resume: mic reopened\n");
+            
         }
         break;
     }
@@ -2204,7 +2155,7 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         lv_obj_set_parent(update_confirm_popup, lv_screen_active());
                         lv_obj_move_foreground(cont);
                         }
-                        simulate_button_released();
+
                         // mic关闭，开启KWS
                         xz_aec_mic_close(thiz);
                         if(aec_enabled) 
@@ -2248,16 +2199,12 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                         lv_obj_move_foreground(cont);
                     }
                     // mic开启，关闭KWS
+                    xz_aec_mic_open(thiz);
                     if (g_kws_force_exit)
                     {
                         g_kws_force_exit = 0;
                         kws_demo_stop();
                     }
-                    xz_aec_mic_open(thiz);
-                    break;
-                case UI_MSG_SWITCH_TO_CALL:
-                    // 显示通话界面
-                    show_call_screen();
                     break;
                 case UI_MSG_WEATHER_UPDATE:
                     weather_ui_update_callback();
@@ -2662,8 +2609,8 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             //rt_kprintf("current_screen: %p, main_container: %p\n", current_screen, main_container);
             //rt_kprintf("inactive_time: %d, limit: %d\n", lv_display_get_inactive_time(NULL), IDLE_TIME_LIMIT);
             if (lv_display_get_inactive_time(NULL) > IDLE_TIME_LIMIT && current_screen != standby_screen && current_screen != g_startup_screen && current_screen != shutdown_screen &&
-    current_screen != sleep_screen && current_screen != low_battery_shutdown_screen && g_pan_connected && current_screen != call_screen) //如果当前满足了屏幕不活跃的时间，并且当前屏幕不是待机屏幕，当前屏幕不是开机启动屏幕，当前屏幕不是关机屏幕，当前屏幕不是睡眠屏幕
-            {                       //加这些条件的限制是为了保证只有在对话界面才会进入超时休眠阶段
+    current_screen != sleep_screen && current_screen != low_battery_shutdown_screen && g_pan_connected) //如果当前满足了屏幕不活跃的时间，并且当前屏幕不是待机屏幕，当前屏幕不是开机启动屏幕，当前屏幕不是关机屏幕，当前屏幕不是睡眠屏幕
+            {                       //加这些条件的限制是为了保证只有在对话界面才会进入休眠阶段
 
                 rt_kprintf("listen_tick\n");
                 last_listen_tick= 1;
@@ -2671,9 +2618,9 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
             }
             // 低功耗判断
 #ifdef XIAOZHI_USING_MQTT
-            if (mqtt_g_state == kDeviceStateUnknown && last_listen_tick > 0 && g_pan_connected && she_bei_ma && !s_talk_with_hfp)
+            if (mqtt_g_state == kDeviceStateUnknown && last_listen_tick > 0 && g_pan_connected && she_bei_ma)
 #else
-            if (g_xz_ws.is_connected == 0 && last_listen_tick > 0 && g_pan_connected && she_bei_ma && !s_talk_with_hfp) 
+            if (g_xz_ws.is_connected == 0 && last_listen_tick > 0 && g_pan_connected && she_bei_ma)
 #endif  
             {
                 rt_tick_t now = rt_tick_get();
@@ -2683,7 +2630,6 @@ font_medium = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, medium_fo
                 {
                     LOG_I("Websocket disconnected, entering low power mode");
                     lv_display_trigger_activity(NULL);
-                    simulate_button_released();
                     if(thiz->vad_enabled)
                     {
                         thiz->vad_enabled = false;

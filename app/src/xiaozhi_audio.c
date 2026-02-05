@@ -40,13 +40,6 @@
 #include "xiaozhi_websocket.h"
 #include "xiaozhi_audio.h"
 #include "log.h"
-// Resampler for HFP bridging
-#include "sifli_resample.h"
-
-// Local fallback for RT_MIN if not provided by headers
-#ifndef RT_MIN
-#define RT_MIN(a,b) (( (a) < (b) ) ? (a) : (b))
-#endif
 
 #undef LOG_TAG
 #define LOG_TAG "xz"
@@ -103,137 +96,6 @@ void xz_mic_open(xz_audio_t *thiz);
 void xz_mic_close(xz_audio_t *thiz);
 void xz_speaker_close(xz_audio_t *thiz);
 void xz_speaker_open(xz_audio_t *thiz);
-
-// HFP <-> Xiaozhi bridging state
-uint8_t s_talk_with_hfp = 0;
-static uint16_t s_hfp_samplerate = 8000; // 8000 or 16000
-static uint8_t s_hfp_mic_acc_buf[320];
-static uint32_t s_hfp_mic_acc_len = 0;
-static sifli_resample_t *s_resample_8k_to_16k = NULL;
-
-// App-side HFP downlink bridge: resample 24k -> s_hfp_samplerate and chunk to 120/240B
-void xiaozhi_to_hfp(uint8_t *fifo, uint16_t fifo_size);
-static void xz_hfp_send_resampled(uint8_t *fifo, uint16_t fifo_size)
-{
-    static sifli_resample_t *s_down_resample = NULL;
-    static uint32_t s_last_dst_rate = 0;
-    static uint8_t s_msbc_acc_buf[240];
-    static uint32_t s_msbc_acc_len = 0;
-
-    uint32_t dst_rate = s_hfp_samplerate; // 8000 or 16000
-    uint32_t chunk_size = (dst_rate == 8000) ? 120 : 240;
-
-    if (!dst_rate)
-    {
-        // Default to 8k if not initialized yet
-        dst_rate = 8000;
-    }
-
-    // Create or refresh resampler (decoded PCM is 24k mono 16-bit)
-    if (!s_down_resample || s_last_dst_rate != dst_rate)
-    {
-        if (s_down_resample)
-        {
-            sifli_resample_close(s_down_resample);
-            s_down_resample = NULL;
-        }
-        s_down_resample = sifli_resample_open(1, 24000, dst_rate);
-        RT_ASSERT(s_down_resample);
-        s_last_dst_rate = dst_rate;
-        s_msbc_acc_len = 0;
-    }
-
-    uint32_t produced = sifli_resample_process(s_down_resample, (int16_t *)fifo, fifo_size, 0);
-    uint8_t *out = (uint8_t *)sifli_resample_get_output(s_down_resample);
-
-    uint32_t offset = 0;
-    while (offset < produced)
-    {
-        uint32_t copy_len = RT_MIN(chunk_size - s_msbc_acc_len, produced - offset);
-        memcpy(&s_msbc_acc_buf[s_msbc_acc_len], &out[offset], copy_len);
-        s_msbc_acc_len += copy_len;
-        offset += copy_len;
-
-        if (s_msbc_acc_len == chunk_size)
-        {
-            xiaozhi_to_hfp(s_msbc_acc_buf, (uint16_t)chunk_size);
-            s_msbc_acc_len = 0;
-        }
-    }
-}
-
-void hfp_opened_for_xiaozhi(uint32_t samplerate)
-{
-    s_hfp_samplerate = samplerate;
-}
-
-static void xz_feed_mic_bytes(const uint8_t *data, uint32_t len)
-{
-    xz_audio_t *thiz = &xz_audio;
-    if (!thiz->rb_opus_encode_input || !thiz->event)
-        return;
-    rt_ringbuffer_put(thiz->rb_opus_encode_input, (uint8_t *)data, len);
-    thiz->mic_rx_count += (int)len;
-    if (thiz->mic_rx_count >= (int)XZ_MIC_FRAME_LEN)
-    {
-        thiz->mic_rx_count = 0;
-        rt_event_send(thiz->event, XZ_EVENT_MIC_RX);
-    }
-}
-
-
-int hfp_to_xiaozhi(uint32_t samplerate, uint8_t *data, uint8_t data_len) //yu
-{
-    if (!s_talk_with_hfp)
-        return 0;
-    if(vad_enable) //如果开起了不打断功能 1是不打断
-    { 
-        if (XZ_DEVICE_STATE != kDeviceStateIdle) 
-        {
-            return 0; // 非待命状态不处理VAD
-        }
-    }
-
-    const uint8_t *src = data;
-    uint32_t src_len = data_len;
-    uint8_t *resampled = NULL;
-    uint32_t resampled_len = 0;
-
-    if (samplerate == 8000)
-    {
-        if (!s_resample_8k_to_16k)
-        {
-            s_resample_8k_to_16k = sifli_resample_open(1, 8000, 16000);
-            RT_ASSERT(s_resample_8k_to_16k);
-        }
-        // Process PCM16 data; returns number of bytes written
-        resampled_len = sifli_resample_process(s_resample_8k_to_16k, (int16_t *)src, src_len, 0);
-        resampled = (uint8_t *)sifli_resample_get_output(s_resample_8k_to_16k);
-    }
-    else
-    {
-        resampled = (uint8_t *)src;
-        resampled_len = src_len;
-    }
-
-    // Accumulate to 320 bytes chunks and feed to Xiaozhi pipeline
-    uint32_t offset = 0;
-    while (offset < resampled_len)
-    {
-        uint32_t copy_len = RT_MIN(320 - s_hfp_mic_acc_len, resampled_len - offset);
-        memcpy(&s_hfp_mic_acc_buf[s_hfp_mic_acc_len], &resampled[offset], copy_len);
-        s_hfp_mic_acc_len += copy_len;
-        offset += copy_len;
-
-        if (s_hfp_mic_acc_len == 320)
-        {
-            xz_feed_mic_bytes(s_hfp_mic_acc_buf, 320);
-            s_hfp_mic_acc_len = 0;
-        }
-    }
-
-    return 1;
-}
 
 void xz_audio_send(uint8_t *data, int len)
 {
@@ -312,7 +174,7 @@ void xz_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
         rt_kprintf("invalid udp\n");
     }
 }
-#ifdef XIAOZHI_USING_MQTT
+#ifdef XIAOZHI_USING_MQT
 void simulate_button_pressed()
 {
      rt_kprintf("mqtt simulate_button_pressed pressed\r\n");
@@ -492,7 +354,6 @@ void xz_speaker(int on)
     xz_audio_t *thiz = &xz_audio;
     if (on)
     {
-       
         xz_speaker_open(thiz);
     }
     else
@@ -716,10 +577,6 @@ static void xz_opus_thread_entry(void *p)
             }
             if(res > 0)
             {
-                if (s_talk_with_hfp)
-                {
-                    xz_hfp_send_resampled((uint8_t *)thiz->downlink_decode_out, (uint16_t)(res * 2));
-                }
                 audio_write_and_wait(thiz, (uint8_t *)thiz->downlink_decode_out,
                                  res * 2);
             }
@@ -750,11 +607,11 @@ void xz_aec_mic_open(xz_audio_t *thiz)
 {
     if (!thiz->mic)
     {
-        LOG_I("mic on,thiz->inited=%d", thiz->is_rx_enable);
-        if (thiz->is_rx_enable == 1)
-        {
-            return;
-        }
+        LOG_I("mic on,thiz->inited=%d", thiz->inited);
+        // if (thiz->inited != 2)
+        // {
+        //     return;
+        // }
         while (1)
         {
             uint8_t buf[128];
@@ -1163,14 +1020,12 @@ wait_speaker:
         LOG_I("speaker busy\r\n");
         LOG_I("speaker busy mic=%d\r\n", (uint32_t)thiz->mic);
         LOG_I("speaker busy speaker=%d\r\n", (uint32_t)thiz->speaker);
-
         try_times++;
         if (try_times < 20)
         {
             rt_thread_mdelay(10);
             goto wait_speaker;
         }
-
     }
 }
 

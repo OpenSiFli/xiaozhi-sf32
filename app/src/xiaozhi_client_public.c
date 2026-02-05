@@ -29,8 +29,6 @@
 #include "drv_flash.h"
 #include "gui_app_pm.h"
 #include "../board/board_hardware.h"
-#include "xiaozhi_ui.h"
-#include "xiaozhi_audio.h"
 static const char *ota_version =
     "{\r\n "
     "\"version\": 2,\r\n"
@@ -74,9 +72,6 @@ static const char *ota_version =
 // 公共变量定义
 extern uint8_t aec_enabled;
 extern BOOL first_pan_connected;
-extern lv_obj_t *sleep_screen;
-extern uint8_t s_talk_with_hfp;
-extern bool is_xiaozhi_phone;
 
 static uint8_t g_en_vad = 1;
 static uint8_t g_en_aec = 1;
@@ -455,57 +450,7 @@ char* build_ota_query_url(const char* chip_id)
     return query_url;
 }
 
-void answer_phone()
-{
-    if(!s_talk_with_hfp)
-    {
-        if(is_xiaozhi_phone == false)
-        {
-            rt_kprintf("不允许小智接电话 return\n");
-            bt_interface_audio_switch(1); //声音回到手机
-            return;
-        }
-        s_talk_with_hfp = 1;
-        bt_interface_audio_switch(0);    
-        lv_display_trigger_activity(NULL);
-        //将音频切换为小智
-        audio_server_select_public_audio_device(AUDIO_DEVICE_XIAOZHI);
-        lv_obj_t *now_screen = lv_screen_active();
-        if(now_screen == sleep_screen)
-        {
-            gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
-        }
-        // 切换到通话界面
-        ui_switch_to_call_screen();
-    }
-    else
-    {
-        rt_kprintf("s_talk_with_hfp 状态不对: %d\n",s_talk_with_hfp);
-    }
 
-}
-
-void hung_up_phone()
-{
-    if(s_talk_with_hfp)
-    {
-        lv_display_trigger_activity(NULL);
-        //切换回默认音频
-        audio_server_select_public_audio_device(AUDIO_DEVICE_SPEAKER);
-        s_talk_with_hfp = 0;
-        // 如果当前处于KWS模式，则退出KWS模式
-        if (g_kws_running) 
-        {  
-            rt_kprintf("KWS exit\n");
-            g_kws_force_exit = 1;
-        }
-        ui_switch_to_xiaozhi_screen();
-    }
-    else
-    {
-        rt_kprintf("s_talk_with_hfp 状态不对: %d\n",s_talk_with_hfp);
-    }
-}
 
 
 
