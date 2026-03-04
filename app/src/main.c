@@ -27,7 +27,6 @@
 #include "xiaozhi_mqtt.h"
 #include "xiaozhi_audio.h"
 #include "bts2_app_inc.h"
-#include "hfp_type_api.h"
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
 #include "bt_env.h"
@@ -35,7 +34,6 @@
 #include "drv_gpio.h"
 #include "battery_calculator.h"
 #include "bt_pan_ota.h"
-#include "charge.h"
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -43,13 +41,13 @@
  * @param  None
  * @retval None
  */
-static rt_tick_t s_last_cind_query_tick = 0; // 上次聚合查询触发时间
 /* User code start from here
  * --------------------------------------------------------*/
 
 #define BT_APP_READY 0
 #define BT_APP_CONNECT_PAN 1
 #define BT_APP_CONNECT_PAN_SUCCESS 2
+#define WEBSOC_RECONNECT 4
 #define KEEP_FIRST_PAN_RECONNECT 5
 #define XZ_CONFIG_UPDATE 6
 #define BT_APP_PHONE_DISCONNECTED 7  // 手机主动断开
@@ -73,8 +71,7 @@ extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
 extern rt_mailbox_t g_ui_task_mb;
-extern lv_obj_t *call_screen;
-extern uint8_t s_talk_with_hfp;
+
 
 bt_app_t g_bt_app_env;
 rt_mailbox_t g_bt_app_mb;
@@ -205,6 +202,7 @@ void HAL_MspInit(void)
     BSP_IO_Init();
     set_pinmux();
 }
+
 static void battery_level_task(void *parameter)
 {
     if (g_battery_mb == NULL)
@@ -312,9 +310,7 @@ void bt_app_connect_pan_timeout_handle(void *parameter)
     LOG_I("bt_app_connect_pan_timeout_handle %x, %d", g_bt_app_mb,
           g_bt_app_env.bt_connected);
     if ((g_bt_app_mb != NULL) && (g_bt_app_env.bt_connected))
-    {
         rt_mb_send(g_bt_app_mb, BT_APP_CONNECT_PAN);
-    }
     return;
 }
 
@@ -941,9 +937,7 @@ int main(void)
     xz_ws_button_init2(); // 初始化关机键
 
 #endif
-
     set_pinmux();
-
     // Create  xiaozhi UI
     rt_err_t result = rt_thread_init(
         &xiaozhi_ui_thread, "xz_ui", xiaozhi_ui_task, NULL,

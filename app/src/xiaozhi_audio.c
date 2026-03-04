@@ -319,7 +319,7 @@ void xz_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
         rt_kprintf("invalid udp\n");
     }
 }
-#ifdef XIAOZHI_USING_MQTT
+#ifdef XIAOZHI_USING_MQT
 void simulate_button_pressed()
 {
     rt_kprintf("mqtt simulate_button_pressed pressed\r\n");
@@ -764,11 +764,11 @@ void xz_aec_mic_open(xz_audio_t *thiz)
 {
     if (!thiz->mic)
     {
-        LOG_I("mic on,thiz->inited=%d", thiz->is_rx_enable);
-        if (thiz->is_rx_enable == 1)
-        {
-            return;
-        }
+        LOG_I("mic on,thiz->inited=%d", thiz->inited);
+        // if (thiz->inited != 2)
+        // {
+        //     return;
+        // }
         while (1)
         {
             uint8_t buf[128];
@@ -1177,7 +1177,6 @@ wait_speaker:
         LOG_I("speaker busy\r\n");
         LOG_I("speaker busy mic=%d\r\n", (uint32_t)thiz->mic);
         LOG_I("speaker busy speaker=%d\r\n", (uint32_t)thiz->speaker);
-
         try_times++;
         if (try_times < 20)
         {

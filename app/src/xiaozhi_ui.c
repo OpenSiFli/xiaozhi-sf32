@@ -15,7 +15,6 @@
 #include "drv_flash.h"
 #include "xiaozhi_websocket.h"
 #include "bts2_app_inc.h"
-#include "bts2_app_interface.h"
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
 #include "bt_env.h"
@@ -74,7 +73,6 @@ typedef enum
     UI_MSG_STANDBY_EMOJI,
     UI_MSG_SWITCH_TO_STANDBY,
     UI_MSG_SWITCH_TO_MAIN,
-    UI_MSG_SWITCH_TO_CALL,
     UI_MSG_UPDATE_WEATHER_AND_TIME,
     UI_MSG_STANDBY_CHAT_OUTPUT,
     UI_MSG_VOLUME_UPDATE,     // 更新下拉菜单里面的音量进度条
@@ -148,8 +146,6 @@ extern lv_obj_t *call_screen;
 extern bool g_skip_startup;
 extern bool lowpower_shutdown_state;
 extern bool g_low_power_mode;
-extern uint8_t s_talk_with_hfp;
-extern void simulate_button_released(void);
 
 static struct rt_semaphore update_ui_sema;
 

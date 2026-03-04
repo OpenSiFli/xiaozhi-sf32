@@ -26,7 +26,6 @@
 #include "../kws/app_recorder_process.h"
 #include "../board/board_hardware.h"
 #include "xiaozhi_screen.h"
-#include "xiaozhi_mqtt.h"
 
 #ifdef EZIP_BINARY_MODE
 #include "xiaozhi_ezip_array.h"
@@ -41,9 +40,6 @@ lv_obj_t *sleep_screen = NULL;
 lv_obj_t *low_battery_shutdown_screen = NULL;
 lv_obj_t *low_battery_warning_screen = NULL;
 lv_obj_t *g_startup_screen = NULL;
-lv_obj_t *call_screen = NULL;
-static lv_obj_t *call_img = NULL;
-static lv_obj_t *call_title_label = NULL;
 //休眠页面
 static lv_obj_t *sleep_label = NULL;
 static int sleep_countdown = 3;
@@ -87,8 +83,6 @@ extern lv_obj_t *cont;
 extern lv_obj_t *update_confirm_popup;
 extern bool low_battery_shutdown_triggered;
 extern lv_obj_t *g_screen_before_low_battery;
-extern rt_mailbox_t g_bt_app_mb;
-
 static void sleep_countdown_cb(lv_timer_t *timer)
 {
     

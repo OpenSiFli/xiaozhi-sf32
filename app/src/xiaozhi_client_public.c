@@ -29,8 +29,6 @@
 #include "drv_flash.h"
 #include "gui_app_pm.h"
 #include "../board/board_hardware.h"
-#include "xiaozhi_ui.h"
-#include "xiaozhi_audio.h"
 static const char *ota_version =
     "{\r\n "
     "\"version\": 2,\r\n"
@@ -74,9 +72,6 @@ static const char *ota_version =
 // 公共变量定义
 extern uint8_t aec_enabled;
 extern BOOL first_pan_connected;
-extern lv_obj_t *sleep_screen;
-extern uint8_t s_talk_with_hfp;
-extern bool is_xiaozhi_phone;
 
 static uint8_t g_en_vad = 1;
 static uint8_t g_en_aec = 1;
