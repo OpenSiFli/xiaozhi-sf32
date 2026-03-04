@@ -397,6 +397,9 @@ int register_device_with_server(void)
 #elif defined(BSP_USING_BOARD_SF32LB52_XTY_AI_THT)
     reg_params.model = "sf32lb52-xty-ai-tht";
     reg_params.solution = "SF32LB52_XTY_AI_THT_SPI_ST7789";
+#elif defined(BSP_USING_BOARD_SF32LB52_NANO_A128R16)
+    reg_params.model = "sf32lb52-nano-a128r16";
+    reg_params.solution = "SF32LB52_NANO_A128R16_TFT_CO5300";
 #endif
 
     reg_params.version = VERSION; // 当前固件版本
@@ -451,6 +454,11 @@ char *build_ota_query_url(const char *chip_id)
     snprintf(query_url, sizeof(query_url),
              "https://ota.sifli.com/v2/xiaozhi/SF32LB52_XTY_AI_THT_SPI_ST7789/"
              "sf32lb52-xty-ai-tht?chip_id=%s&version=latest",
+             chip_id);
+#elif defined(BSP_USING_BOARD_SF32LB52_NANO_A128R16)
+    snprintf(query_url, sizeof(query_url),
+             "https://ota.sifli.com/v2/xiaozhi/SF32LB52_NANO_A128R16_TFT_CO5300/"
+             "sf32lb52-nano-a128r16?chip_id=%s&version=latest",
              chip_id);
 #endif
 

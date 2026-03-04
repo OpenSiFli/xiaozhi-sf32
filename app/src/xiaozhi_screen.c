@@ -638,8 +638,15 @@ void show_call_screen(void)
         static lv_style_t style_call_title;
         lv_style_init(&style_call_title);
         static lv_font_t *call_title_font = NULL;
+
+        #if defined(TINY_TTF_MODE)
+        if (!call_title_font)
+            call_title_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", 28);
+        #else
         if (!call_title_font)
             call_title_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, 28);
+        #endif
+
         lv_style_set_text_font(&style_call_title, call_title_font);
         lv_style_set_text_color(&style_call_title, lv_color_hex(0xFFFFFF));
 
