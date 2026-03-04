@@ -26,6 +26,7 @@
 #include "../kws/app_recorder_process.h"
 #include "../board/board_hardware.h"
 #include "xiaozhi_screen.h"
+#include "xiaozhi_mqtt.h"
 
 #ifdef EZIP_BINARY_MODE
 #include "xiaozhi_ezip_array.h"
@@ -40,6 +41,9 @@ lv_obj_t *sleep_screen = NULL;
 lv_obj_t *low_battery_shutdown_screen = NULL;
 lv_obj_t *low_battery_warning_screen = NULL;
 lv_obj_t *g_startup_screen = NULL;
+lv_obj_t *call_screen = NULL;
+static lv_obj_t *call_img = NULL;
+static lv_obj_t *call_title_label = NULL;
 //休眠页面
 static lv_obj_t *sleep_label = NULL;
 static int sleep_countdown = 3;
@@ -76,6 +80,8 @@ extern rt_timer_t update_weather_ui_timer;
 extern uint8_t aec_enabled;
 extern const unsigned char xiaozhi_font[];
 extern const int xiaozhi_font_size;
+extern const lv_image_dsc_t call_phone; //通话图标
+// 引入小智连接状态
 extern xiaozhi_ws_t g_xz_ws;
 extern xiaozhi_context_t g_xz_context;
 extern lv_obj_t *standby_screen;
@@ -83,6 +89,7 @@ extern lv_obj_t *cont;
 extern lv_obj_t *update_confirm_popup;
 extern bool low_battery_shutdown_triggered;
 extern lv_obj_t *g_screen_before_low_battery;
+extern rt_mailbox_t g_bt_app_mb;
 static void sleep_countdown_cb(lv_timer_t *timer)
 {
     
@@ -638,8 +645,15 @@ void show_call_screen(void)
         static lv_style_t style_call_title;
         lv_style_init(&style_call_title);
         static lv_font_t *call_title_font = NULL;
+
+        #if defined(TINY_TTF_MODE)
+        if (!call_title_font)
+            call_title_font = lv_tiny_ttf_create_file("A:/DroidSansFallback.ttf", 28);
+        #else
         if (!call_title_font)
             call_title_font = lv_tiny_ttf_create_data(xiaozhi_font, xiaozhi_font_size, 28);
+        #endif
+
         lv_style_set_text_font(&style_call_title, call_title_font);
         lv_style_set_text_color(&style_call_title, lv_color_hex(0xFFFFFF));
 

@@ -31,6 +31,7 @@
 #include "lv_tiny_ttf.h"
 #include "lv_obj.h"
 #include "lv_label.h"
+#include "lv_async.h"
 #include "lib_et_asr.h"
 #include "../weather/weather.h"
 #ifdef BSP_USING_PM
@@ -38,6 +39,7 @@
 #endif // BSP_USING_PM
 #include "xiaozhi_client_public.h"
 #include "xiaozhi_ui.h"
+#include "xiaozhi_screen.h"
 #include "xiaozhi_audio.h"
 
 #define MAX_WSOCK_HDR_LEN 4096
@@ -53,6 +55,7 @@ extern uint8_t Initiate_disconnection_flag;
 extern rt_mailbox_t g_ui_task_mb;
 extern rt_tick_t last_listen_tick;
 extern void pan_reconnect();
+extern lv_obj_t *call_screen;
 
 
 xiaozhi_ws_t g_xz_ws;
@@ -287,6 +290,8 @@ err_t my_wsapp_fn(int code, char *buf, size_t len)
         }
         rt_kprintf("WebSocket closed\n");
         g_xz_ws.is_connected = 0;
+        // 安排在 LVGL 线程中刷新通话页面顶部文案
+        lv_async_call(xiaozhi_call_screen_update_connection_status_async, NULL);
     }
     else if (code == WS_TEXT)
     {
@@ -307,27 +312,21 @@ void xiaozhi2(int argc, char **argv);
 static void xz_button_event_handler(int32_t pin, button_action_t action)
 {
     rt_kprintf("in ws button handle\n");
-    lv_display_trigger_activity(NULL);
-    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
-     rt_kprintf("in ws button handle2\n");
-    // 如果当前处于KWS模式，则退出KWS模式
-        if (g_kws_running) 
-        {  
-            rt_kprintf("KWS exit\n");
-            g_kws_force_exit = 1;
-        }
+
     static button_action_t last_action = BUTTON_RELEASED;
     if (last_action == action)
+    {
+        rt_kprintf("重复action : %d, return\n", action);
         return;
     }
     lv_display_trigger_activity(NULL);
-    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备
+    gui_pm_fsm(GUI_PM_ACTION_WAKEUP); // 唤醒设备    
     last_action = action;
 
     if (action == BUTTON_PRESSED)
     {
         lv_obj_t *now_screen = lv_screen_active();
-        rt_kprintf("pressed\r\n");
+
         rt_kprintf("按键->对话");
 
         // 检查是否弹窗显示中
@@ -360,9 +359,6 @@ static void xz_button_event_handler(int32_t pin, button_action_t action)
     }
     else if (action == BUTTON_RELEASED)
     {
-#ifdef BSP_USING_PM
-        gui_pm_fsm(GUI_PM_ACTION_WAKEUP);
-#endif
         rt_kprintf("released\r\n");
         // 仅在已唤醒时发送停止监听
         if (g_xz_ws.is_connected)

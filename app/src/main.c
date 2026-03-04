@@ -27,6 +27,7 @@
 #include "xiaozhi_mqtt.h"
 #include "xiaozhi_audio.h"
 #include "bts2_app_inc.h"
+#include "hfp_type_api.h"
 #include "ble_connection_manager.h"
 #include "bt_connection_manager.h"
 #include "bt_env.h"
@@ -34,6 +35,7 @@
 #include "drv_gpio.h"
 #include "battery_calculator.h"
 #include "bt_pan_ota.h"
+#include "charge.h"
 /* Common functions for RT-Thread based platform
  * -----------------------------------------------*/
 /**
@@ -41,6 +43,7 @@
  * @param  None
  * @retval None
  */
+static rt_tick_t s_last_cind_query_tick = 0; // 上次聚合查询触发时间
 /* User code start from here
  * --------------------------------------------------------*/
 
@@ -71,6 +74,8 @@ extern lv_timer_t *ui_sleep_timer;
 extern lv_obj_t *shutdown_screen;
 extern lv_obj_t *sleep_screen;
 extern rt_mailbox_t g_ui_task_mb;
+extern lv_obj_t *call_screen;
+extern uint8_t s_talk_with_hfp;
 
 
 bt_app_t g_bt_app_env;
@@ -91,8 +96,7 @@ static int reconnect_attempts = 0;
 static uint8_t g_sleep_enter_flag = 0; // 进入睡眠标志位
 // HFP来电/通话状态跟踪
 static uint8_t g_prev_call_status = 0; // 0: 无通话, 1: 通话中
-static uint8_t g_prev_callsetup_status =
-    0; // 0: 无建立, 1: 来电, 2: 去电, 3: 响铃
+static uint8_t g_prev_callsetup_status = 0; // 0: 无建立, 1: 来电, 2: 去电, 3: 响铃
 // UI线程和battery线程控制块
 static struct rt_thread xiaozhi_ui_thread;
 static struct rt_thread battery_thread;

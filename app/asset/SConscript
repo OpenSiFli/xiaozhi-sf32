@@ -60,7 +60,6 @@ else:
 
 # Check if EZIP_BINARY_MODE macro is defined
 if GetDepend('EZIP_BINARY_MODE'):
-    print("-------Generating ezip binary files...!!!\n")
     # Generate ezip binary files to current directory (which is the build directory due to variant_dir)
     objs += Env.ImgResource(objs_ezip, img_flags+' -binfile 2 -binext .ezip -dpt 1 -detailcf 16')
 else:

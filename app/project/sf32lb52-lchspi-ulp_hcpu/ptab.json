@@ -18,10 +18,10 @@
                 "tags": [
                     "DFU_PAN_LOADER"
                 ],
-                "img": "dfu_pan",
-                "exec": "dfu_pan",
+                "img": "dfu",
+                "exec": "dfu",
                 "ftab": {
-                    "name": "dfu_pan",
+                    "name": "dfu",
                     "address": [
                         "base",
                         "xip"
